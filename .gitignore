@@ -1,0 +1,20 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+.pytest_cache/
+
+# Generated outputs (Person 3 pipeline)
+output/safety_maps/*.png
+output/validation_results/*.json
+output/reports/*.png
+
+# Mission data (provided by Person 1 & 2, not committed)
+data/dem/*.tif
+data/paths/*.json
+
+# Misc
+.~lock.*
+*.egg-info/
+dist/
+build/
