@@ -1,0 +1,4 @@
+mission_id,name,landing_lat,landing_lon,objective_lat,objective_lon,description,distance_km
+mission_1,Easy Science,64.38384, -109.26492, 64.04822, -132.92783, Collect samples near Shackleton,15
+mission_2,Medium Explore,68.21988, -110.57642,77.17797, -125.8259 craters + temp survey,40
+mission_3,Hard Prospect,81.39762, -98.84167, 70.18373, -130.99576,Resource-rich zone,50
