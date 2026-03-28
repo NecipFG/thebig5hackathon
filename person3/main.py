@@ -5,6 +5,9 @@ Usage:
     python -m person3.main --mission 1
     python -m person3.main --all
 
+NOTE: Must be run from the repository root (thebig5hackathon/) so that
+relative paths data/ and output/ resolve correctly.
+
 Expects:
     data/dem/mission{N}.tif       — LOLA GeoTIFF from Person 1
     data/paths/mission{N}_path.json — path from Person 2: [[row,col],...]
@@ -17,6 +20,7 @@ Outputs (for Person 4 & 5):
 import argparse
 import json
 import os
+import sys
 import numpy as np
 
 from person3.terrain_loader import load_dem
@@ -115,15 +119,26 @@ def main():
     mission_ids = [1, 2, 3] if args.all else [args.mission]
 
     all_results = []
+    errors = []
     for mid in mission_ids:
-        result = process_mission(mid)
-        all_results.append(result)
+        try:
+            result = process_mission(mid)
+            all_results.append(result)
+        except Exception as exc:
+            print(f"\n  [ERROR] Mission {mid} failed: {exc}")
+            errors.append(mid)
 
     print("\n=== SUMMARY ===")
     for r in all_results:
         status = "PASS ✓" if r['passed'] else "FAIL ✗"
         print(f"  Mission {r['mission_id']} ({r['mission_name']}): {status} | "
               f"{r['path_length_km']:.3f} km | max slope {r['max_slope_deg']}°")
+    for mid in errors:
+        print(f"  Mission {mid}: ERROR (see above)")
+
+    any_failed = errors or any(not r['passed'] for r in all_results)
+    if any_failed:
+        sys.exit(1)
 
 
 if __name__ == '__main__':
