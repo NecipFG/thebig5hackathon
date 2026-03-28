@@ -1,3 +1,5 @@
+"""Hazard mapper: converts slope arrays into binary safety maps and PNG visualizations."""
+
 import numpy as np
 import matplotlib
 matplotlib.use('Agg')  # non-interactive backend, safe for scripts
@@ -8,6 +10,11 @@ import matplotlib.colors as mcolors
 def build_safety_map(slope_deg: np.ndarray, max_slope_deg: float = 20.0) -> np.ndarray:
     """
     Build binary safety map from slope array.
+
+    Args:
+        slope_deg: 2D float array of slope values in degrees.
+        max_slope_deg: Threshold in degrees; slopes strictly above this are marked hazard (1).
+                       Slopes at or below this value are marked safe (0).
 
     Returns:
         safety_map: uint8 array, 0 = safe, 1 = hazard
