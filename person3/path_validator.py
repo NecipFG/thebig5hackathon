@@ -1,3 +1,5 @@
+"""Path validator: checks rover waypoint paths against safety maps and computes risk metrics."""
+
 import numpy as np
 import math
 from dataclasses import dataclass
@@ -39,6 +41,9 @@ def validate_path(
         ValueError: if any waypoint is outside the map bounds
     """
     rows, cols = safety_map.shape
+
+    if not path:
+        raise ValueError("path must not be empty")
 
     for wp in path:
         r, c = wp

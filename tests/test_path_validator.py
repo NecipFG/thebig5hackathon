@@ -64,3 +64,9 @@ def test_out_of_bounds_waypoint_raises():
     path = [[0, 0], [10, 10]]  # (10,10) is outside 5x5
     with pytest.raises(ValueError, match="out of bounds"):
         validate_path(path, safety, slope, pixel_size_m=20.0)
+
+def test_empty_path_raises():
+    safety = make_safety_map()
+    slope = make_slope_map()
+    with pytest.raises(ValueError, match="empty"):
+        validate_path([], safety, slope, pixel_size_m=20.0)
