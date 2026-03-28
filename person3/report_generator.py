@@ -71,6 +71,7 @@ def generate_safety_report(
     # Right: metrics table
     ax_tbl = fig.add_axes([0.60, 0.10, 0.38, 0.75])
     ax_tbl.axis('off')
+    ax_tbl.set_facecolor('#1a1a2e')
 
     metrics = [
         ['Metric', 'Value'],

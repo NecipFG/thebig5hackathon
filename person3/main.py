@@ -108,6 +108,10 @@ def process_mission(mission_id: int) -> dict:
 
 
 def main():
+    if not os.path.isdir('person3'):
+        print("ERROR: Run this script from the repository root (thebig5hackathon/).", file=sys.stderr)
+        sys.exit(1)
+
     parser = argparse.ArgumentParser(description="Person 3: Terrain & Validation Pipeline")
     group = parser.add_mutually_exclusive_group(required=True)
     group.add_argument('--mission', type=int, choices=[1, 2, 3],
