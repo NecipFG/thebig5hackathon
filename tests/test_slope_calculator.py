@@ -30,3 +30,13 @@ def test_output_dtype_is_float32():
     dem = np.ones((5, 5), dtype=np.float32)
     slope = compute_slope_degrees(dem, pixel_size_m=20.0)
     assert slope.dtype == np.float32
+
+def test_zero_pixel_size_raises():
+    dem = np.ones((5, 5), dtype=np.float32)
+    with pytest.raises(ValueError, match="pixel_size_m must be positive"):
+        compute_slope_degrees(dem, pixel_size_m=0.0)
+
+def test_1d_input_raises():
+    dem = np.ones(10, dtype=np.float32)
+    with pytest.raises(ValueError, match="dem must be a 2D array"):
+        compute_slope_degrees(dem, pixel_size_m=20.0)
