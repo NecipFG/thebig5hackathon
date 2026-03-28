@@ -48,17 +48,20 @@ def generate_safety_report(
     ax_map.imshow(safety_map, cmap=cmap, vmin=0, vmax=1, alpha=0.7)
     ax_map.imshow(slope_deg, cmap='gray', alpha=0.3)
 
-    if path:
-        rows = [wp[0] for wp in path]
-        cols = [wp[1] for wp in path]
-        ax_map.plot(cols, rows, 'b-', linewidth=2, label='Rover path')
-        ax_map.plot(cols[0],  rows[0],  'go', markersize=10, label='Start')
-        ax_map.plot(cols[-1], rows[-1], 'r*', markersize=12, label='End')
+    legend_handles = [
+        mpatches.Patch(color='#2ecc71', label='Safe (slope ≤ 20°)'),
+        mpatches.Patch(color='#e74c3c', label='Hazard (slope > 20°)'),
+    ]
 
-    safe_patch   = mpatches.Patch(color='#2ecc71', label='Safe (slope ≤ 20°)')
-    hazard_patch = mpatches.Patch(color='#e74c3c', label='Hazard (slope > 20°)')
-    ax_map.legend(handles=[safe_patch, hazard_patch],
-                  loc='lower right', fontsize=9,
+    if path:
+        rows_list = [wp[0] for wp in path]
+        cols_list = [wp[1] for wp in path]
+        path_line, = ax_map.plot(cols_list, rows_list, 'b-', linewidth=2, label='Rover path')
+        start_dot, = ax_map.plot(cols_list[0], rows_list[0], 'go', markersize=10, label='Start')
+        end_star, = ax_map.plot(cols_list[-1], rows_list[-1], 'r*', markersize=12, label='End')
+        legend_handles = [path_line, start_dot, end_star] + legend_handles
+
+    ax_map.legend(handles=legend_handles, loc='lower right', fontsize=9,
                   facecolor='#1a1a2e', labelcolor='white')
     ax_map.set_title('Terrain Safety Map + Path', color='white', fontsize=12)
     ax_map.tick_params(colors='white')
@@ -68,7 +71,6 @@ def generate_safety_report(
     # Right: metrics table
     ax_tbl = fig.add_axes([0.60, 0.10, 0.38, 0.75])
     ax_tbl.axis('off')
-    ax_tbl.set_facecolor('#1a1a2e')
 
     metrics = [
         ['Metric', 'Value'],

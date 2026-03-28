@@ -19,3 +19,17 @@ def test_report_creates_png_file():
         generate_safety_report(result, safety, slope, path, out_path)
         assert os.path.exists(out_path)
         assert os.path.getsize(out_path) > 5000
+
+def test_report_fail_verdict():
+    """Report correctly renders FAIL verdict when path crosses a hazard cell."""
+    slope = np.zeros((20, 20), dtype=np.float32)
+    slope[10, 10] = 25.0  # hazardous cell
+    safety = build_safety_map(slope, max_slope_deg=20.0)
+    path = [[2, 2], [10, 10], [18, 18]]  # goes through hazard
+    result = validate_path(path, safety, slope, pixel_size_m=20.0, mission_name="Fail Mission")
+    assert result.passed is False
+    with tempfile.TemporaryDirectory() as tmpdir:
+        out_path = os.path.join(tmpdir, "fail_report.png")
+        generate_safety_report(result, safety, slope, path, out_path)
+        assert os.path.exists(out_path)
+        assert os.path.getsize(out_path) > 5000
