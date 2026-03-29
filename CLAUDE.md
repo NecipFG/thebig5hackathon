@@ -1,43 +1,54 @@
-# The Big 5 - TUA Astro Hackathon
+# CLAUDE.md
+
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
 ## Project Overview
-Lunar rover autonomous pathfinding system for the TUA (Turkish Aerospace Agency) Astro Hackathon 2026. A 5-person team building A* pathfinding on real NASA LOLA lunar terrain data.
 
-## Challenge Goal
-Find safe, traversable paths for a lunar rover across 3 mission scenarios at the Moon's South Pole, using real elevation data.
+DM1 Moon Station ("DM1 Ay Istasyonu") - A browser-based 3D terrain visualization tool for lunar/planetary GeoTIFF surface data. The UI and code comments are in Turkish.
 
-## Core Technical Stack
-- **Algorithm**: A* pathfinding on lunar DEM grid
-- **Data source**: NASA LOLA (Lunar Orbiter Laser Altimeter) - South Pole DEM
-- **Safety constraint**: Slopes < 20°, avoid craters/permanently shadowed regions
-- **Visualization**: 3D terrain with overlaid paths (3 missions)
+## Running the Project
 
-## Team Roles
-| Person | Role | Key Deliverable |
-|--------|------|-----------------|
-| 1 | Data & Mission Designer | 3 mission scenarios with real lunar coordinates |
-| 2 | Algorithm Developer | A* working on all 3 missions + metrics |
-| 3 | Terrain & Validation Expert | Safety maps + validated paths report |
-| 4 | Visualization & Demo Builder | Interactive 3D demo |
-| 5 | Documentation & Presentation | 1-page summary, tech doc, 5-7 slides |
+```bash
+node server.js
+# Opens at http://localhost:8080 (serves 3d_V1.3.html by default)
+```
 
-## Required Deliverables (Sunday 6 PM)
-1. High-level summary (1 page, non-technical)
-2. Technical approach (1-2 pages, algorithm explanation)
-3. Working demo (runnable, 3 missions visible, interactive)
-4. Live presentation (5-7 min pitch + demo walkthrough)
+No build step, no package manager. All dependencies are loaded via CDN in the HTML files.
 
-## Key Files
-- `36HOUR_REAL_SPRINT_PLAN.md` — master timeline and per-person task breakdown
-- `LUNAR_ROVER_CHALLENGE_GUIDE.md` — challenge rules, A* reference implementation, deliverable requirements
-- `QUICK_REFERENCE_CARD.md` — condensed who-does-what reference
-- `SATURDAY_MORNING_KICKOFF.md` — detailed first-3-hours guide
-- `FRIDAY_NIGHT_PREP.md` — pre-hackathon team logistics checklist
+## Architecture
 
-## Critical Path
-Person 1 (missions) → Person 2 (algorithm) → Person 3 (validation) + Person 4 (demo) → Person 5 (docs wrap-up)
+The project consists of standalone HTML pages with inline JS — no modules, no bundler.
 
-Person 2's working algorithm by Saturday 8 PM is the hardest and most critical deadline.
+### Active Files
 
-## No existing code yet
-All files are planning/strategy documents. Implementation starts Saturday morning.
+- **3d_V1.3.html** — Current version. The main application served by default. Three.js-based 3D terrain viewer with:
+  - GeoTIFF loading and terrain mesh generation (solid box with side walls and edge alpha fade)
+  - Two-point distance measurement along the terrain surface
+  - Wall-E vehicle animation that follows the surface path between marked points
+  - Three camera modes: free orbit, 3rd-person follow, 1st-person follow
+  - Black-and-white (lunar) color mode toggle
+  - Bilinear elevation interpolation for fast surface-following (`getTerrainY`)
+- **index.html** — Alternative viewer using CesiumJS with a lunar ellipsoid globe (requires Cesium Ion token)
+- **3d-viewer.html** — Earlier standalone Three.js terrain viewer (simpler, no vehicle animation)
+- **server.js** — Minimal Node.js static file server (no dependencies). Handles MIME types for .glb, .gltf, .tif, and standard web formats.
+
+### Version History
+
+`3d_V1.1.html` → `3d_V1.2.html` → `3d_V1.3.html` are iterative versions. Only V1.3 is actively served.
+
+### Data & Assets
+
+- **Site01/** — GeoTIFF terrain data files (.tif, .xyzi, .tgz). `*_surf.tif` = surface elevation, `*_slp.tif` = slope, `*_ldec.tif` = local declination. Resolution: 5m per pixel (`PIXEL_SIZE = 5`).
+- **Assets/WALLE.glb** — Optimized GLB model used for vehicle animation (auto-scaled to ~8 scene units on load)
+- **Assets/wall-e/** — Source GLTF model with separate textures
+- **wall-e.glb** — Root-level copy of the GLB model (63MB)
+
+## Key Technical Details
+
+- Three.js r128 (legacy non-module build via CDN, uses `THREE.PlaneBufferGeometry`, `THREE.GLTFLoader` from examples)
+- GeoTIFF.js v2.1.3 via CDN for client-side .tif parsing
+- Terrain is downsampled to max 512x512 grid when source is larger (`step = ceil(max(w,h) / 512)`)
+- Height scale is computed dynamically: `heightScale = (terrainSize * 0.3) / elevationRange`
+- Vehicle speed constant: 1000 m/s (`VEHICLE_SPEED`)
+- Edge fade uses custom shader patching via `onBeforeCompile` to inject per-vertex alpha attributes
+- The terrain group is lifted so min elevation sits at Y=50, base at Y=0

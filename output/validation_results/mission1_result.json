@@ -1,0 +1,11 @@
+{
+  "mission_id": 1,
+  "mission_name": "Shackleton Crater Rim",
+  "passed": false,
+  "hazard_count": 36,
+  "hazard_pct": 90.0,
+  "path_length_km": 1.103,
+  "max_slope_deg": 66.77,
+  "mean_slope_deg": 42.08,
+  "waypoint_count": 40
+}

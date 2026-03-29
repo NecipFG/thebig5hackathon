@@ -1,0 +1,980 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="utf-8">
+    <title>3D Harita V1.4 - Yuzey Takipli Cizgi</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/geotiff@2.1.3/dist-browser/geotiff.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js"></script>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { background: #1a1a2e; font-family: 'Segoe UI', sans-serif; overflow: hidden; }
+
+        #canvas-container { width: 100%; height: 100vh; }
+
+        #panel {
+            position: absolute; top: 15px; left: 15px; z-index: 10;
+            background: rgba(10, 10, 30, 0.9); color: #e0e0e0;
+            padding: 20px; border-radius: 12px; width: 320px;
+            border: 1px solid rgba(100, 140, 255, 0.3);
+            box-shadow: 0 4px 30px rgba(0,0,0,0.5);
+        }
+        #panel h2 { color: #7eb8ff; margin-bottom: 12px; font-size: 18px; }
+        #panel p { font-size: 13px; line-height: 1.6; margin-bottom: 8px; }
+
+        .btn {
+            display: inline-block; padding: 10px 18px; margin: 5px 3px;
+            border: none; border-radius: 8px; cursor: pointer;
+            font-size: 13px; font-weight: 600; transition: all 0.2s;
+        }
+        .btn-primary { background: #4a7aff; color: white; }
+        .btn-primary:hover { background: #5d8bff; }
+        .btn-danger { background: #ff4a6a; color: white; }
+        .btn-danger:hover { background: #ff6a85; }
+        .btn-toggle { background: #3a3a50; color: #ccc; }
+        .btn-toggle.active { background: #7eb8ff; color: #0a0a1e; }
+        .btn-toggle:hover { background: #5a5a70; }
+        .btn-toggle.active:hover { background: #9ecaff; }
+
+        #file-input { display: none; }
+
+        .slider-group {
+            margin-top: 10px;
+        }
+        .slider-group label {
+            font-size: 12px; color: #8ab4ff; font-weight: 600;
+        }
+        .slider-group input[type="range"] {
+            width: 100%; margin-top: 4px;
+            accent-color: #4a7aff;
+        }
+
+        .info-box {
+            background: rgba(74, 122, 255, 0.15); border-radius: 8px;
+            padding: 10px 12px; margin-top: 10px; font-size: 12px;
+            border: 1px solid rgba(74, 122, 255, 0.25);
+        }
+        .info-box .label { color: #8ab4ff; font-weight: 600; }
+
+        .point-info {
+            display: flex; align-items: center; gap: 8px;
+            margin: 4px 0; font-size: 13px;
+        }
+        .dot {
+            width: 12px; height: 12px; border-radius: 50%;
+            display: inline-block; border: 2px solid white;
+        }
+        .dot-1 { background: #ffdd57; }
+        .dot-2 { background: #ff6b6b; }
+
+        #loading {
+            position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+            z-index: 20; color: #7eb8ff; font-size: 20px; font-family: 'Segoe UI', sans-serif;
+            display: none;
+        }
+        #loading .spinner {
+            width: 40px; height: 40px; border: 4px solid rgba(126,184,255,0.2);
+            border-top: 4px solid #7eb8ff; border-radius: 50%;
+            animation: spin 1s linear infinite; margin: 0 auto 15px;
+        }
+        @keyframes spin { to { transform: rotate(360deg); } }
+
+        #distance-line {
+            position: absolute; bottom: 20px; left: 50%; transform: translateX(-50%);
+            z-index: 10; background: rgba(10, 10, 30, 0.9); color: #ffdd57;
+            padding: 12px 24px; border-radius: 10px; font-size: 16px; font-weight: 600;
+            border: 1px solid rgba(255, 221, 87, 0.3); display: none;
+        }
+
+        #colorbar {
+            position: absolute; right: 20px; top: 50%; transform: translateY(-50%);
+            z-index: 10; width: 30px; height: 250px; border-radius: 6px;
+            border: 1px solid rgba(255,255,255,0.2); overflow: hidden;
+        }
+        #colorbar-gradient {
+            width: 100%; height: 100%;
+            background: linear-gradient(to bottom, #ff4444, #ffaa00, #ffff00, #44ff44, #4488ff, #2244aa);
+        }
+        .colorbar-label {
+            position: absolute; right: 40px; color: #ccc; font-size: 11px;
+            font-family: 'Segoe UI', sans-serif; white-space: nowrap;
+        }
+        .colorbar-label.top { top: 0; }
+        .colorbar-label.bottom { bottom: 0; }
+    </style>
+</head>
+<body>
+
+<div id="loading">
+    <div class="spinner"></div>
+    <div style="text-align:center;">Harita yukleniyor...</div>
+</div>
+
+<div id="panel">
+    <h2>3D Harita V1.4 - Yuzey Takip</h2>
+    <p>Bir <b>.tif</b> dosyasi secin. Arazi modeli alti dolu kutu seklinde olusturulacak.</p>
+
+    <select id="server-tif" class="btn btn-primary" style="max-width:290px; margin-bottom:4px;">
+        <option value="">-- Sunucudan TIF Sec --</option>
+    </select>
+    <br>
+    <input type="file" id="file-input" accept=".tif,.tiff">
+    <button class="btn btn-primary" onclick="document.getElementById('file-input').click()" style="font-size:11px; padding:6px 12px;">Diskten Sec</button>
+    <button class="btn btn-danger" id="btn-reset" onclick="resetPoints()" style="display:none;">Noktalari Sifirla</button>
+    <button class="btn btn-toggle" id="btn-bw" onclick="toggleBW()" style="display:none;">Siyah-Beyaz (Ay)</button>
+
+    <div id="camera-controls" style="display:none; margin-top:8px;">
+        <div style="font-size:12px; color:#8ab4ff; font-weight:600; margin-bottom:4px;">Kamera Modu:</div>
+        <button class="btn btn-toggle active" id="btn-cam-free" onclick="setCameraMode('free')" style="padding:6px 12px; font-size:12px;">Serbest</button>
+        <button class="btn btn-toggle" id="btn-cam-3rd" onclick="setCameraMode('3rd')" style="padding:6px 12px; font-size:12px;">3. Sahis</button>
+        <button class="btn btn-toggle" id="btn-cam-1st" onclick="setCameraMode('1st')" style="padding:6px 12px; font-size:12px;">1. Sahis</button>
+    </div>
+
+    <div class="info-box" id="base-info" style="display:none; margin-top:8px;">
+        <span class="label">Taban:</span> Model Y=50'de baslar, kutu tabani Y=0'a kadar iner
+    </div>
+
+    <div class="info-box" id="file-info" style="display:none;">
+        <div><span class="label">Dosya:</span> <span id="fname"></span></div>
+        <div><span class="label">Boyut:</span> <span id="fsize"></span></div>
+        <div><span class="label">Cozunurluk:</span> <span id="fres"></span></div>
+    </div>
+
+    <div id="points-info" style="margin-top:12px; display:none;">
+        <div class="point-info"><span class="dot dot-1"></span> <span id="p1-text">Henuz secilmedi</span></div>
+        <div class="point-info"><span class="dot dot-2"></span> <span id="p2-text">Henuz secilmedi</span></div>
+    </div>
+
+    <div class="info-box" style="margin-top:8px;">
+        <div><span class="label">Kontroller:</span></div>
+        <div>Sol tik: Nokta koy</div>
+        <div>Sag tik + surukleme: Dondur</div>
+        <div>Scroll: Yakinlastir/Uzaklastir</div>
+        <div>Orta tik + surukleme: Kaydir</div>
+    </div>
+</div>
+
+<div id="distance-line"></div>
+
+<div id="colorbar" style="display:none;">
+    <div id="colorbar-gradient"></div>
+    <span class="colorbar-label top" id="cb-max"></span>
+    <span class="colorbar-label bottom" id="cb-min"></span>
+</div>
+
+<div id="canvas-container"></div>
+
+<script>
+    // ============ THREE.JS SCENE SETUP ============
+    let scene, camera, renderer, controls;
+    let terrainGroup = null; // Group containing all terrain meshes
+    let terrainTopMesh = null; // Reference for raycasting
+    let markers = [];
+    let lineMesh = null;
+    let tubeMeshRef = null;
+    let raycaster = new THREE.Raycaster();
+    let mouse = new THREE.Vector2();
+
+    // Vehicle animation
+    let vehicleModel = null;
+    let vehicleCurve = null;
+    let vehicleProgress = 0;
+    let vehicleCurveLength = 0;
+    let vehicleAnimating = false;
+    let lastFrameTime = 0;
+    const VEHICLE_SPEED = 1000; // metre/saniye
+
+    // Terrain data reference
+    let terrainWidth = 0, terrainHeight = 0;
+    let elevationMin = 0, elevationMax = 1;
+    let heightScale = 1;
+    const PIXEL_SIZE = 5; // 1 piksel = 5 metre
+    let meterPerUnit = PIXEL_SIZE; // guncellenir: step * PIXEL_SIZE
+
+    // Store data for rebuild and direct elevation lookup
+    let cachedData = null, cachedW = 0, cachedH = 0, cachedStep = 1;
+    let gridElevData = null, gridW = 0, gridH = 0, gridLiftOffset = 50;
+    let bwMode = false;
+
+    // Camera tracking
+    let cameraMode = 'free'; // 'free', '3rd', '1st'
+    let savedCamPos = null;
+    let savedCamTarget = null;
+    function initScene() {
+        scene = new THREE.Scene();
+        scene.background = new THREE.Color(0x0a0a1e);
+
+        // Arka plan skybox (uzay duvar kagidi)
+        const bgLoader = new THREE.TextureLoader();
+        bgLoader.load('Assets/wallpaper.webp', (texture) => {
+            texture.mapping = THREE.EquirectangularReflectionMapping;
+            scene.background = texture;
+            scene.environment = texture;
+        });
+
+        camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 10000);
+        camera.position.set(0, 150, 200);
+
+        renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.outputEncoding = THREE.sRGBEncoding;
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.setPixelRatio(window.devicePixelRatio);
+        document.getElementById('canvas-container').appendChild(renderer.domElement);
+
+        controls = new THREE.OrbitControls(camera, renderer.domElement);
+        controls.enableDamping = true;
+        controls.dampingFactor = 0.08;
+        controls.maxPolarAngle = Math.PI * 0.85;
+
+        // Lights
+        const ambientLight = new THREE.AmbientLight(0x404060, 0.6);
+        scene.add(ambientLight);
+
+        const dirLight = new THREE.DirectionalLight(0xffffff, 1.0);
+        dirLight.position.set(100, 200, 100);
+        scene.add(dirLight);
+
+        const dirLight2 = new THREE.DirectionalLight(0x8888ff, 0.3);
+        dirLight2.position.set(-100, 100, -100);
+        scene.add(dirLight2);
+
+        // Add a subtle bottom light to illuminate the base
+        const bottomLight = new THREE.DirectionalLight(0x4466aa, 0.4);
+        bottomLight.position.set(0, -100, 0);
+        scene.add(bottomLight);
+
+        // Grid helper
+        const grid = new THREE.GridHelper(500, 50, 0x222244, 0x111133);
+        scene.add(grid);
+
+        window.addEventListener('resize', onResize);
+        renderer.domElement.addEventListener('click', onCanvasClick);
+        animate();
+    }
+
+    function onResize() {
+        camera.aspect = window.innerWidth / window.innerHeight;
+        camera.updateProjectionMatrix();
+        renderer.setSize(window.innerWidth, window.innerHeight);
+    }
+
+    function animate(time) {
+        requestAnimationFrame(animate);
+
+        // Vehicle movement along curve
+        if (vehicleAnimating && vehicleModel && vehicleCurve) {
+            const dt = lastFrameTime ? (time - lastFrameTime) / 1000 : 0;
+            lastFrameTime = time;
+
+            const sceneSpeed = VEHICLE_SPEED / meterPerUnit;
+            vehicleProgress += (sceneSpeed * dt) / vehicleCurveLength;
+            if (vehicleProgress >= 1) vehicleProgress = 0;
+
+            const pos = vehicleCurve.getPointAt(vehicleProgress);
+            vehicleModel.position.copy(pos);
+
+            const ahead = Math.min(vehicleProgress + 0.005, 0.999);
+            const nextPos = vehicleCurve.getPointAt(ahead);
+            vehicleModel.lookAt(nextPos);
+
+            // Camera tracking
+            if (cameraMode === '3rd') {
+                const dir = new THREE.Vector3().subVectors(nextPos, pos).normalize();
+                const camOffset = dir.clone().multiplyScalar(-55);
+                camOffset.y += 35;
+                camera.position.lerp(pos.clone().add(camOffset), 0.08);
+                controls.target.lerp(pos, 0.08);
+            } else if (cameraMode === '1st') {
+                const eyePos = pos.clone();
+                eyePos.y += 12;
+                camera.position.lerp(eyePos, 0.15);
+                const lookTarget = nextPos.clone();
+                lookTarget.y += 12;
+                controls.target.lerp(lookTarget, 0.15);
+            }
+        }
+
+        controls.update();
+        markers.forEach(m => {
+            if (m.sprite) m.sprite.lookAt(camera.position);
+        });
+        renderer.render(scene, camera);
+    }
+
+    // ============ GEOTIFF LOADING ============
+
+    // Sunucudaki TIF dosyalarini listele
+    fetch('/api/tif-list').then(r => r.json()).then(files => {
+        const sel = document.getElementById('server-tif');
+        files.forEach(f => {
+            const opt = document.createElement('option');
+            opt.value = 'Site01/' + f.name;
+            opt.textContent = f.name + ' (' + (f.size / (1024*1024)).toFixed(0) + ' MB)';
+            sel.appendChild(opt);
+        });
+    }).catch(() => {});
+
+    document.getElementById('server-tif').addEventListener('change', async (e) => {
+        if (!e.target.value) return;
+        await loadTIF(null, e.target.value);
+    });
+
+    document.getElementById('file-input').addEventListener('change', async (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+        await loadTIF(file, null);
+    });
+
+    async function loadTIF(file, url) {
+        const loading = document.getElementById('loading');
+        const loadingText = loading.querySelector('div:last-child');
+        loading.style.display = 'block';
+        loadingText.textContent = 'GeoTIFF aciliyor...';
+
+        try {
+            // URL varsa fromUrl (HTTP range request - hizli), yoksa fromBlob
+            const tiff = url
+                ? await GeoTIFF.fromUrl(url)
+                : await GeoTIFF.fromBlob(file);
+            const image = await tiff.getImage();
+            const width = image.getWidth();
+            const height = image.getHeight();
+            const fileName = url ? url.split('/').pop() : file.name;
+            const fileSize = file ? file.size : 0;
+
+            loadingText.textContent = `Cozunurluk: ${width}x${height} - Veri okunuyor...`;
+
+            // Mesh icin downsample adimi (max 512x512 grid)
+            const step = Math.max(1, Math.ceil(Math.max(width, height) / 512));
+            const outW = Math.floor(width / step);
+            const outH = Math.floor(height / step);
+            const data = new Float32Array(outW * outH);
+
+            const totalBytes = width * height * 4;
+            const SAFE_BYTES = 200 * 1024 * 1024;
+
+            if (totalBytes <= SAFE_BYTES) {
+                const rasters = await image.readRasters();
+                const fullData = rasters[0];
+                for (let oy = 0; oy < outH; oy++) {
+                    for (let ox = 0; ox < outW; ox++) {
+                        data[oy * outW + ox] = fullData[(oy * step) * width + (ox * step)];
+                    }
+                }
+            } else {
+                // Buyuk dosya: serit serit oku
+                const stripRows = Math.max(step, Math.min(height, Math.floor(SAFE_BYTES / (width * 4))));
+                const totalStrips = Math.ceil(height / stripRows);
+                let stripIndex = 0;
+
+                for (let srcStartY = 0; srcStartY < height; srcStartY += stripRows) {
+                    stripIndex++;
+                    loadingText.textContent = `Serit okunuyor ${stripIndex}/${totalStrips}...`;
+                    // UI guncellenmesi icin bir tick bekle
+                    await new Promise(r => setTimeout(r, 0));
+
+                    const srcEndY = Math.min(srcStartY + stripRows, height);
+                    const rasters = await image.readRasters({
+                        window: [0, srcStartY, width, srcEndY]
+                    });
+                    const stripData = rasters[0];
+
+                    const firstOutY = Math.ceil(srcStartY / step);
+                    const lastOutY = Math.min(Math.floor((srcEndY - 1) / step), outH - 1);
+
+                    for (let oy = firstOutY; oy <= lastOutY; oy++) {
+                        const localY = oy * step - srcStartY;
+                        for (let ox = 0; ox < outW; ox++) {
+                            data[oy * outW + ox] = stripData[localY * width + ox * step];
+                        }
+                    }
+                }
+            }
+
+            loadingText.textContent = 'Arazi modeli olusturuluyor...';
+            await new Promise(r => setTimeout(r, 0));
+
+            terrainWidth = outW;
+            terrainHeight = outH;
+
+            document.getElementById('fname').textContent = fileName;
+            document.getElementById('fsize').textContent = fileSize ? (fileSize / (1024*1024)).toFixed(2) + ' MB' : '-';
+            document.getElementById('fres').textContent = width + ' x ' + height + ' px (' + outW + 'x' + outH + ' yuklendi)';
+            document.getElementById('file-info').style.display = 'block';
+            document.getElementById('points-info').style.display = 'block';
+            document.getElementById('btn-reset').style.display = 'inline-block';
+            document.getElementById('btn-bw').style.display = 'inline-block';
+            document.getElementById('base-info').style.display = 'block';
+
+            cachedData = data;
+            cachedW = outW;
+            cachedH = outH;
+            cachedStep = 1;
+
+            meterPerUnit = step * PIXEL_SIZE;
+            buildSolidTerrain(data, outW, outH, 1);
+
+        } catch (err) {
+            alert('TIF dosyasi yuklenirken hata: ' + err.message);
+            console.error(err);
+        } finally {
+            loading.style.display = 'none';
+        }
+    }
+
+    // ============ ALPHA FADE HELPER ============
+    function patchMaterialWithAlpha(mat) {
+        mat.transparent = true;
+        mat.depthWrite = true;
+        mat.onBeforeCompile = (shader) => {
+            shader.vertexShader = shader.vertexShader.replace(
+                'void main() {',
+                'attribute float alpha;\nvarying float vAlpha;\nvoid main() {\nvAlpha = alpha;'
+            );
+            shader.fragmentShader = shader.fragmentShader.replace(
+                'void main() {',
+                'varying float vAlpha;\nvoid main() {'
+            );
+            shader.fragmentShader = shader.fragmentShader.replace(
+                '#include <output_fragment>',
+                '#include <output_fragment>\ngl_FragColor.a *= vAlpha;'
+            );
+        };
+    }
+
+    // ============ SOLID TERRAIN BUILDER ============
+    function buildSolidTerrain(data, width, height, step) {
+        // Remove old terrain group
+        if (terrainGroup) {
+            terrainGroup.traverse(child => {
+                if (child.geometry) child.geometry.dispose();
+                if (child.material) child.material.dispose();
+            });
+            scene.remove(terrainGroup);
+        }
+        resetPoints();
+
+        terrainGroup = new THREE.Group();
+
+        const w = Math.floor(width / step);
+        const h = Math.floor(height / step);
+
+        // Find min/max elevation
+        let min = Infinity, max = -Infinity;
+        for (let i = 0; i < data.length; i++) {
+            const v = data[i];
+            if (isNaN(v) || v < -1e10 || v > 1e10) continue;
+            if (v < min) min = v;
+            if (v > max) max = v;
+        }
+        elevationMin = min;
+        elevationMax = max;
+        const range = max - min || 1;
+
+        const terrainSize = Math.max(w, h);
+        heightScale = (terrainSize * 0.3) / range;
+
+        // Lift terrain so its lowest point sits at Y=50, base goes down to Y=0
+        const liftOffset = 50;
+        const maxElevHeight = range * heightScale;
+        const baseY = -liftOffset; // Bottom of the box at Y=0 (relative to group offset)
+
+        // Fade band: 15% of each dimension
+        const fadeFrac = 0.15;
+        const fadePixelsX = Math.max(1, w * fadeFrac);
+        const fadePixelsZ = Math.max(1, h * fadeFrac);
+
+        // Build sampled elevation grid
+        const elevGrid = new Float32Array(w * h);
+        for (let iy = 0; iy < h; iy++) {
+            for (let ix = 0; ix < w; ix++) {
+                const si = (iy * step) * width + (ix * step);
+                let elev = data[si];
+                if (isNaN(elev) || elev < -1e10 || elev > 1e10) elev = min;
+                elevGrid[iy * w + ix] = (elev - min) * heightScale;
+            }
+        }
+
+        // Store for fast elevation lookup
+        gridElevData = elevGrid;
+        gridW = w;
+        gridH = h;
+        gridLiftOffset = liftOffset;
+
+        // ---- 1. TOP SURFACE (terrain) with edge fade ----
+        const topGeom = new THREE.PlaneBufferGeometry(w, h, w - 1, h - 1);
+        topGeom.rotateX(-Math.PI / 2);
+        const topVerts = topGeom.attributes.position.array;
+        const topColors = new Float32Array(topVerts.length);
+        const topAlphas = new Float32Array(w * h);
+
+        for (let iy = 0; iy < h; iy++) {
+            for (let ix = 0; ix < w; ix++) {
+                const vi = (iy * w + ix) * 3;
+                const elev = elevGrid[iy * w + ix];
+                topVerts[vi + 1] = elev;
+
+                const t = elev / (range * heightScale);
+                const color = elevationColor(t);
+                topColors[vi] = color.r;
+                topColors[vi + 1] = color.g;
+                topColors[vi + 2] = color.b;
+
+                // Edge fade alpha
+                const distX = Math.min(ix, w - 1 - ix);
+                const distZ = Math.min(iy, h - 1 - iy);
+                const ax = Math.min(1.0, distX / fadePixelsX);
+                const az = Math.min(1.0, distZ / fadePixelsZ);
+                topAlphas[iy * w + ix] = Math.min(ax, az);
+            }
+        }
+        topGeom.setAttribute('color', new THREE.BufferAttribute(topColors, 3));
+        topGeom.setAttribute('alpha', new THREE.BufferAttribute(topAlphas, 1));
+        topGeom.computeVertexNormals();
+
+        const topMat = new THREE.MeshPhongMaterial({
+            vertexColors: true, shininess: 20, side: THREE.FrontSide
+        });
+        patchMaterialWithAlpha(topMat);
+        terrainTopMesh = new THREE.Mesh(topGeom, topMat);
+        terrainGroup.add(terrainTopMesh);
+
+        // ---- 2. BOTTOM SURFACE (flat base) with edge fade ----
+        const bSegs = 64;
+        const bottomGeom = new THREE.PlaneBufferGeometry(w, h, bSegs, bSegs);
+        bottomGeom.rotateX(Math.PI / 2);
+        const bAlphas = new Float32Array((bSegs + 1) * (bSegs + 1));
+        for (let iy = 0; iy <= bSegs; iy++) {
+            for (let ix = 0; ix <= bSegs; ix++) {
+                const fx = ix / bSegs;
+                const fz = iy / bSegs;
+                const dxB = Math.min(fx, 1 - fx) * w;
+                const dzB = Math.min(fz, 1 - fz) * h;
+                const axB = Math.min(1.0, dxB / fadePixelsX);
+                const azB = Math.min(1.0, dzB / fadePixelsZ);
+                bAlphas[iy * (bSegs + 1) + ix] = Math.min(axB, azB);
+            }
+        }
+        bottomGeom.setAttribute('alpha', new THREE.BufferAttribute(bAlphas, 1));
+        const bottomMat = new THREE.MeshPhongMaterial({
+            color: 0x2a2a3e, shininess: 10, side: THREE.FrontSide
+        });
+        patchMaterialWithAlpha(bottomMat);
+        const bottomMesh = new THREE.Mesh(bottomGeom, bottomMat);
+        bottomMesh.position.y = baseY;
+        terrainGroup.add(bottomMesh);
+
+        // ---- 3. SIDE WALLS with edge fade ----
+        const sideMat = new THREE.MeshPhongMaterial({
+            color: 0x3a3a50, shininess: 10, side: THREE.DoubleSide
+        });
+        patchMaterialWithAlpha(sideMat);
+
+        buildSideWall(elevGrid, w, h, baseY, 'front', sideMat, fadePixelsX, fadePixelsZ);
+        buildSideWall(elevGrid, w, h, baseY, 'back', sideMat, fadePixelsX, fadePixelsZ);
+        buildSideWall(elevGrid, w, h, baseY, 'left', sideMat, fadePixelsX, fadePixelsZ);
+        buildSideWall(elevGrid, w, h, baseY, 'right', sideMat, fadePixelsX, fadePixelsZ);
+
+        // Lift entire group so terrain min is at Y=50, base bottom is at Y=0
+        terrainGroup.position.y = liftOffset;
+        scene.add(terrainGroup);
+
+        // Position camera to see the full box
+        const dist = Math.max(w, h) * 0.8;
+        camera.position.set(dist * 0.4, dist * 0.5, dist * 0.7);
+        controls.target.set(0, liftOffset + maxElevHeight * 0.3, 0);
+        controls.update();
+
+        // Show colorbar
+        document.getElementById('colorbar').style.display = 'block';
+        document.getElementById('cb-max').textContent = elevationMax.toFixed(1);
+        document.getElementById('cb-min').textContent = elevationMin.toFixed(1);
+    }
+
+    function buildSideWall(elevGrid, w, h, baseY, side, material, fadePixelsX, fadePixelsZ) {
+        let count, getPos, getAlpha;
+        const halfW = w / 2;
+        const halfH = h / 2;
+
+        switch (side) {
+            case 'front':
+                count = w;
+                getPos = (i) => ({ x: i - halfW + 0.5, z: halfH - 0.5, topY: elevGrid[(h - 1) * w + i] });
+                getAlpha = (i) => Math.min(1.0, Math.min(i, w - 1 - i) / fadePixelsX);
+                break;
+            case 'back':
+                count = w;
+                getPos = (i) => ({ x: i - halfW + 0.5, z: -halfH + 0.5, topY: elevGrid[i] });
+                getAlpha = (i) => Math.min(1.0, Math.min(i, w - 1 - i) / fadePixelsX);
+                break;
+            case 'left':
+                count = h;
+                getPos = (i) => ({ x: -halfW + 0.5, z: i - halfH + 0.5, topY: elevGrid[i * w] });
+                getAlpha = (i) => Math.min(1.0, Math.min(i, h - 1 - i) / fadePixelsZ);
+                break;
+            case 'right':
+                count = h;
+                getPos = (i) => ({ x: halfW - 0.5, z: i - halfH + 0.5, topY: elevGrid[i * w + (w - 1)] });
+                getAlpha = (i) => Math.min(1.0, Math.min(i, h - 1 - i) / fadePixelsZ);
+                break;
+        }
+
+        const vertices = [];
+        const alphas = [];
+
+        for (let i = 0; i < count - 1; i++) {
+            const p0 = getPos(i);
+            const p1 = getPos(i + 1);
+            const a0 = getAlpha(i);
+            const a1 = getAlpha(i + 1);
+
+            // Triangle 1: p0-top, p0-bottom, p1-top
+            vertices.push(p0.x, p0.topY, p0.z, p0.x, baseY, p0.z, p1.x, p1.topY, p1.z);
+            alphas.push(a0, a0, a1);
+
+            // Triangle 2: p1-top, p0-bottom, p1-bottom
+            vertices.push(p1.x, p1.topY, p1.z, p0.x, baseY, p0.z, p1.x, baseY, p1.z);
+            alphas.push(a1, a0, a1);
+        }
+
+        const geom = new THREE.BufferGeometry();
+        geom.setAttribute('position', new THREE.Float32BufferAttribute(vertices, 3));
+        geom.setAttribute('alpha', new THREE.Float32BufferAttribute(alphas, 1));
+        geom.computeVertexNormals();
+
+        const mesh = new THREE.Mesh(geom, material);
+        terrainGroup.add(mesh);
+    }
+
+    function elevationColor(t) {
+        if (bwMode) return elevationGray(t);
+        let r, g, b;
+        if (t < 0.2) {
+            const s = t / 0.2;
+            r = 0.13 + s * 0.14; g = 0.17 + s * 0.36; b = 0.66 - s * 0.33;
+        } else if (t < 0.4) {
+            const s = (t - 0.2) / 0.2;
+            r = 0.27 - s * 0.0; g = 0.53 + s * 0.47; b = 0.33 - s * 0.0;
+        } else if (t < 0.6) {
+            const s = (t - 0.4) / 0.2;
+            r = 0.27 + s * 0.73; g = 1.0; b = 0.33 - s * 0.33;
+        } else if (t < 0.8) {
+            const s = (t - 0.6) / 0.2;
+            r = 1.0; g = 1.0 - s * 0.33; b = 0.0;
+        } else {
+            const s = (t - 0.8) / 0.2;
+            r = 1.0; g = 0.67 - s * 0.4; b = 0.0;
+        }
+        return { r, g, b };
+    }
+
+    function elevationGray(t) {
+        const v = 0.15 + t * 0.75;
+        return { r: v, g: v, b: v };
+    }
+
+    function toggleBW() {
+        bwMode = !bwMode;
+        const btn = document.getElementById('btn-bw');
+        btn.classList.toggle('active', bwMode);
+        btn.textContent = bwMode ? 'Renkli Mod' : 'Siyah-Beyaz (Ay)';
+
+        // Update colorbar gradient
+        const grad = document.getElementById('colorbar-gradient');
+        if (bwMode) {
+            grad.style.background = 'linear-gradient(to bottom, #e6e6e6, #bbb, #888, #555, #333, #262626)';
+        } else {
+            grad.style.background = 'linear-gradient(to bottom, #ff4444, #ffaa00, #ffff00, #44ff44, #4488ff, #2244aa)';
+        }
+
+        // Rebuild terrain with new colors
+        if (cachedData) {
+            buildSolidTerrain(cachedData, cachedW, cachedH, cachedStep);
+        }
+    }
+
+    function setCameraMode(mode) {
+        // Save free camera state when leaving free mode
+        if (cameraMode === 'free' && mode !== 'free') {
+            savedCamPos = camera.position.clone();
+            savedCamTarget = controls.target.clone();
+        }
+
+        cameraMode = mode;
+
+        // Update button states
+        document.getElementById('btn-cam-free').classList.toggle('active', mode === 'free');
+        document.getElementById('btn-cam-3rd').classList.toggle('active', mode === '3rd');
+        document.getElementById('btn-cam-1st').classList.toggle('active', mode === '1st');
+
+        // Restore free camera state
+        if (mode === 'free' && savedCamPos) {
+            camera.position.copy(savedCamPos);
+            controls.target.copy(savedCamTarget);
+            controls.update();
+        }
+
+        // Adjust FOV per mode
+        camera.fov = mode === '1st' ? 90 : mode === '3rd' ? 75 : 60;
+        camera.updateProjectionMatrix();
+    }
+
+    // ============ POINT MARKING ============
+    function onCanvasClick(event) {
+        if (!terrainTopMesh) return;
+        if (markers.length >= 2) return;
+
+        const panel = document.getElementById('panel');
+        const rect = panel.getBoundingClientRect();
+        if (event.clientX >= rect.left && event.clientX <= rect.right &&
+            event.clientY >= rect.top && event.clientY <= rect.bottom) return;
+
+        mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
+        mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
+
+        raycaster.setFromCamera(mouse, camera);
+        const intersects = raycaster.intersectObject(terrainTopMesh);
+
+        if (intersects.length > 0) {
+            const point = intersects[0].point;
+            const markerIndex = markers.length;
+
+            const color = markerIndex === 0 ? 0xffdd57 : 0xff6b6b;
+            const sphereGeom = new THREE.SphereGeometry(2, 16, 16);
+            const sphereMat = new THREE.MeshPhongMaterial({
+                color: color, emissive: color, emissiveIntensity: 0.5
+            });
+            const sphere = new THREE.Mesh(sphereGeom, sphereMat);
+            sphere.position.copy(point);
+            sphere.position.y += 2;
+            scene.add(sphere);
+
+            const poleGeom = new THREE.CylinderGeometry(0.3, 0.3, 8, 8);
+            const poleMat = new THREE.MeshPhongMaterial({ color: 0xcccccc });
+            const pole = new THREE.Mesh(poleGeom, poleMat);
+            pole.position.copy(point);
+            pole.position.y += -2;
+            scene.add(pole);
+
+            const ringGeom = new THREE.TorusGeometry(3, 0.4, 8, 32);
+            const ringMat = new THREE.MeshPhongMaterial({
+                color: color, emissive: color, emissiveIntensity: 0.3, transparent: true, opacity: 0.7
+            });
+            const ring = new THREE.Mesh(ringGeom, ringMat);
+            ring.position.copy(point);
+            ring.rotation.x = -Math.PI / 2;
+            scene.add(ring);
+
+            markers.push({
+                sphere, pole, ring, position: point.clone(),
+                objects: [sphere, pole, ring]
+            });
+
+            const elevation = ((point.y / heightScale) + elevationMin).toFixed(2);
+            const label = `X: ${(point.x * meterPerUnit).toFixed(1)}m, Z: ${(point.z * meterPerUnit).toFixed(1)}m, Yukseklik: ${elevation}m`;
+            document.getElementById(`p${markerIndex + 1}-text`).textContent = label;
+
+            if (markers.length === 2) {
+                drawLine();
+            }
+        }
+    }
+
+    // Fast bilinear elevation lookup from grid (no raycasting)
+    function getTerrainY(worldX, worldZ) {
+        const gx = worldX + gridW / 2;
+        const gz = worldZ + gridH / 2;
+        const ix = Math.max(0, Math.min(gridW - 2, Math.floor(gx)));
+        const iy = Math.max(0, Math.min(gridH - 2, Math.floor(gz)));
+        const fx = gx - ix;
+        const fz = gz - iy;
+        const e00 = gridElevData[iy * gridW + ix];
+        const e10 = gridElevData[iy * gridW + ix + 1];
+        const e01 = gridElevData[(iy + 1) * gridW + ix];
+        const e11 = gridElevData[(iy + 1) * gridW + ix + 1];
+        return e00 * (1-fx)*(1-fz) + e10 * fx*(1-fz) + e01 * (1-fx)*fz + e11 * fx*fz + gridLiftOffset;
+    }
+
+    // Preload Wall-E model immediately at page load
+    let preloadedWallE = null;
+    let pendingVehicleSpawn = false;
+    function preloadWallE() {
+        console.log('Wall-E yukleme basliyor...');
+        try {
+            const loader = new THREE.GLTFLoader();
+            loader.load('Assets/WALLE.glb', (gltf) => {
+                preloadedWallE = gltf.scene;
+                const box = new THREE.Box3().setFromObject(preloadedWallE);
+                const size = box.getSize(new THREE.Vector3());
+                const s = 12 / Math.max(size.x, size.y, size.z);
+                preloadedWallE.scale.set(s, s, s);
+                console.log('Wall-E GLTF yuklendi, scale:', s);
+
+                if (pendingVehicleSpawn && vehicleCurve) {
+                    spawnVehicle();
+                    pendingVehicleSpawn = false;
+                }
+            }, (progress) => {
+                if (progress.total) console.log('Wall-E indiriliyor: ' + Math.round(progress.loaded / progress.total * 100) + '%');
+            }, (err) => {
+                console.error('Wall-E GLTF hata, fallback kutu kullaniliyor:', err);
+                createFallbackVehicle();
+            });
+        } catch(e) {
+            console.error('GLTFLoader hata:', e);
+            createFallbackVehicle();
+        }
+    }
+
+    function createFallbackVehicle() {
+        // GLB yuklenemezse basit kutu model
+        preloadedWallE = new THREE.Group();
+        const body = new THREE.Mesh(
+            new THREE.BoxGeometry(8, 6, 6),
+            new THREE.MeshPhongMaterial({ color: 0xddaa33, emissive: 0x554400 })
+        );
+        body.position.y = 3;
+        preloadedWallE.add(body);
+        const eye1 = new THREE.Mesh(
+            new THREE.SphereGeometry(1.5, 8, 8),
+            new THREE.MeshPhongMaterial({ color: 0x88ccff, emissive: 0x4488cc })
+        );
+        eye1.position.set(-2, 7, 2);
+        preloadedWallE.add(eye1);
+        const eye2 = eye1.clone();
+        eye2.position.set(2, 7, 2);
+        preloadedWallE.add(eye2);
+        console.log('Fallback Wall-E kutu olusturuldu');
+
+        if (pendingVehicleSpawn && vehicleCurve) {
+            spawnVehicle();
+            pendingVehicleSpawn = false;
+        }
+    }
+
+    function drawLine() {
+        const p1 = markers[0].position;
+        const p2 = markers[1].position;
+
+        // Sample surface points via grid interpolation (instant, no lag)
+        const segments = 200;
+        const surfacePoints = [];
+        const liftY = 1.5;
+
+        for (let i = 0; i <= segments; i++) {
+            const t = i / segments;
+            const x = p1.x + (p2.x - p1.x) * t;
+            const z = p1.z + (p2.z - p1.z) * t;
+            const y = getTerrainY(x, z) + liftY;
+            surfacePoints.push(new THREE.Vector3(x, y, z));
+        }
+
+        // Line following terrain surface
+        const lineGeom = new THREE.BufferGeometry().setFromPoints(surfacePoints);
+        const lineMat = new THREE.LineBasicMaterial({ color: 0x00ffaa, linewidth: 2 });
+        lineMesh = new THREE.Line(lineGeom, lineMat);
+        scene.add(lineMesh);
+
+        // Tube following terrain surface
+        const curve = new THREE.CatmullRomCurve3(surfacePoints);
+        const tubeGeom = new THREE.TubeGeometry(curve, segments, 0.5, 8, false);
+        const tubeMat = new THREE.MeshPhongMaterial({
+            color: 0x00ffaa, emissive: 0x00ffaa, emissiveIntensity: 0.3,
+            transparent: true, opacity: 0.6
+        });
+        tubeMeshRef = new THREE.Mesh(tubeGeom, tubeMat);
+        scene.add(tubeMeshRef);
+
+        // Surface distance
+        let surfaceDist = 0;
+        for (let i = 1; i < surfacePoints.length; i++) {
+            surfaceDist += surfacePoints[i].distanceTo(surfacePoints[i - 1]);
+        }
+        surfaceDist *= meterPerUnit;
+
+        const dx = p2.x - p1.x;
+        const dz = p2.z - p1.z;
+        const distHorizontal = Math.sqrt(dx * dx + dz * dz) * meterPerUnit;
+        const dElev = ((p2.y - p1.y) / heightScale).toFixed(2);
+        const travelTimeSec = surfaceDist / VEHICLE_SPEED;
+
+        const distLabel = document.getElementById('distance-line');
+        distLabel.innerHTML = `Yuzey: ${surfaceDist.toFixed(1)}m | Yatay: ${distHorizontal.toFixed(1)}m | Yuk. farki: ${dElev}m | Hiz: ${VEHICLE_SPEED} m/s | Sure: ${travelTimeSec.toFixed(1)}s`;
+        distLabel.style.display = 'block';
+
+        // Start vehicle animation
+        vehicleCurve = curve;
+        vehicleCurveLength = curve.getLength();
+        vehicleProgress = 0;
+        lastFrameTime = 0;
+
+        if (preloadedWallE) {
+            spawnVehicle();
+        } else {
+            pendingVehicleSpawn = true;
+        }
+    }
+
+    function spawnVehicle() {
+        // Modeli dogrudan sahneye ekle (clone sorunlarini onlemek icin)
+        if (vehicleModel) {
+            scene.remove(vehicleModel);
+        }
+        vehicleModel = preloadedWallE;
+        const startPos = vehicleCurve.getPointAt(0);
+        vehicleModel.position.copy(startPos);
+        scene.add(vehicleModel);
+        vehicleAnimating = true;
+        document.getElementById('camera-controls').style.display = 'block';
+        console.log('Wall-E sahneye eklendi, pozisyon:', startPos);
+    }
+
+    function resetPoints() {
+        markers.forEach(m => {
+            m.objects.forEach(obj => {
+                scene.remove(obj);
+                if (obj.geometry) obj.geometry.dispose();
+                if (obj.material) obj.material.dispose();
+            });
+        });
+        markers = [];
+
+        if (lineMesh) {
+            scene.remove(lineMesh);
+            lineMesh.geometry.dispose();
+            lineMesh.material.dispose();
+            lineMesh = null;
+        }
+        if (tubeMeshRef) {
+            scene.remove(tubeMeshRef);
+            tubeMeshRef.geometry.dispose();
+            tubeMeshRef.material.dispose();
+            tubeMeshRef = null;
+        }
+
+        if (vehicleModel) {
+            scene.remove(vehicleModel);
+            vehicleModel = null;
+        }
+        vehicleAnimating = false;
+        vehicleCurve = null;
+        vehicleProgress = 0;
+        lastFrameTime = 0;
+        pendingVehicleSpawn = false;
+
+        // Reset camera mode to free
+        if (cameraMode !== 'free') setCameraMode('free');
+        document.getElementById('camera-controls').style.display = 'none';
+
+        document.getElementById('p1-text').textContent = 'Henuz secilmedi';
+        document.getElementById('p2-text').textContent = 'Henuz secilmedi';
+        document.getElementById('distance-line').style.display = 'none';
+    }
+
+    // ============ START ============
+    initScene();
+    preloadWallE();
+</script>
+</body>
+</html>

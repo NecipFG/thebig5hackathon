@@ -1,0 +1,2033 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="utf-8">
+    <title>DM1 Ay Istasyonu - Rota Planlayici</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/geotiff@2.1.3/dist-browser/geotiff.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js"></script>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { background: #0a0a1e; font-family: 'Segoe UI', sans-serif; overflow: hidden; display: flex; height: 100vh; color: #e0e0e0; }
+
+        /* ---- LAYOUT ---- */
+        #gemini-panel {
+            width: 280px; min-width: 280px; height: 100vh;
+            background: rgba(10, 10, 30, 0.95);
+            border-right: 1px solid rgba(100, 140, 255, 0.2);
+            display: flex; flex-direction: column;
+            z-index: 10;
+        }
+        #viewer-area {
+            flex: 1; position: relative; height: 100vh;
+        }
+        #canvas-container { width: 100%; height: 100%; }
+        #control-panel {
+            width: 310px; min-width: 310px; height: 100vh;
+            background: rgba(10, 10, 30, 0.95);
+            border-left: 1px solid rgba(100, 140, 255, 0.2);
+            overflow-y: auto; padding: 16px;
+            z-index: 10;
+        }
+
+        /* ---- GEMINI PANEL ---- */
+        .gemini-header {
+            padding: 16px; border-bottom: 1px solid rgba(100,140,255,0.15);
+            font-size: 14px; font-weight: 700; color: #7eb8ff;
+            display: flex; align-items: center; gap: 8px;
+        }
+        .gemini-chat {
+            flex: 1; padding: 16px; overflow-y: auto;
+            display: flex; flex-direction: column; justify-content: center; align-items: center;
+        }
+        .gemini-placeholder {
+            text-align: center; color: #555; font-size: 13px; line-height: 1.8;
+        }
+        .gemini-placeholder .icon { font-size: 40px; margin-bottom: 12px; opacity: 0.3; }
+        .gemini-input-area {
+            padding: 12px; border-top: 1px solid rgba(100,140,255,0.15);
+        }
+        .gemini-input-area textarea {
+            width: 100%; height: 60px; background: #16213e; border: 1px solid #333;
+            border-radius: 8px; color: #888; padding: 10px; font-size: 12px;
+            resize: none; font-family: inherit;
+        }
+
+        /* ---- CONTROL PANEL ---- */
+        #control-panel h3 { color: #7eb8ff; font-size: 15px; margin-bottom: 10px; }
+        .section { margin-bottom: 16px; }
+        .section-title {
+            font-size: 11px; font-weight: 700; color: #8ab4ff; text-transform: uppercase;
+            letter-spacing: 0.5px; margin-bottom: 8px;
+            padding-bottom: 4px; border-bottom: 1px solid rgba(100,140,255,0.15);
+        }
+
+        .btn {
+            display: inline-block; padding: 8px 14px; margin: 3px 2px;
+            border: none; border-radius: 6px; cursor: pointer;
+            font-size: 12px; font-weight: 600; transition: all 0.2s;
+        }
+        .btn-primary { background: #4a7aff; color: white; }
+        .btn-primary:hover { background: #5d8bff; }
+        .btn-danger { background: #ff4a6a; color: white; }
+        .btn-danger:hover { background: #ff6a85; }
+        .btn-sm { padding: 5px 10px; font-size: 11px; }
+        .btn-toggle { background: #3a3a50; color: #ccc; }
+        .btn-toggle.active { background: #7eb8ff; color: #0a0a1e; }
+
+        select.ctrl-select {
+            width: 100%; padding: 8px; background: #16213e; color: #ccc;
+            border: 1px solid #333; border-radius: 6px; font-size: 12px; margin-bottom: 6px;
+        }
+        #file-input { display: none; }
+
+        .param-row {
+            display: flex; align-items: center; justify-content: space-between;
+            margin-bottom: 8px;
+        }
+        .param-row label { font-size: 12px; color: #aaa; }
+        .param-row input[type="range"] { width: 140px; accent-color: #4a7aff; }
+        .param-row .val { font-size: 12px; color: #7eb8ff; font-weight: 600; min-width: 36px; text-align: right; }
+
+        .info-box {
+            background: rgba(74, 122, 255, 0.1); border-radius: 6px;
+            padding: 8px 10px; margin-bottom: 8px; font-size: 11px;
+            border: 1px solid rgba(74, 122, 255, 0.2);
+        }
+        .info-box .label { color: #8ab4ff; font-weight: 600; }
+
+        .point-info {
+            display: flex; align-items: center; gap: 6px;
+            margin: 4px 0; font-size: 12px;
+        }
+        .dot {
+            width: 10px; height: 10px; border-radius: 50%;
+            display: inline-block; border: 2px solid white;
+        }
+        .dot-start { background: #00ff88; }
+        .dot-end { background: #ff4444; }
+
+        .metric-card {
+            background: linear-gradient(135deg, #1a1a2e, #16213e);
+            border: 1px solid #333; border-radius: 8px;
+            padding: 10px; text-align: center; margin-bottom: 6px;
+        }
+        .metric-value { font-size: 18px; font-weight: 700; color: #00ffff; }
+        .metric-label { font-size: 10px; color: #888; margin-top: 2px; }
+        .metrics-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+
+        /* ---- OVERLAYS ---- */
+        #loading {
+            position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+            z-index: 20; color: #7eb8ff; font-size: 18px; display: none; text-align: center;
+        }
+        #loading .spinner {
+            width: 36px; height: 36px; border: 3px solid rgba(126,184,255,0.2);
+            border-top: 3px solid #7eb8ff; border-radius: 50%;
+            animation: spin 1s linear infinite; margin: 0 auto 10px;
+        }
+        @keyframes spin { to { transform: rotate(360deg); } }
+
+        #colorbar {
+            position: absolute; right: 16px; top: 50%; transform: translateY(-50%);
+            z-index: 10; width: 24px; height: 200px; border-radius: 4px;
+            border: 1px solid rgba(255,255,255,0.2); overflow: hidden; display: none;
+        }
+        #colorbar-gradient {
+            width: 100%; height: 100%;
+            background: linear-gradient(to bottom, #ff4444, #ffaa00, #ffff00, #44ff44, #4488ff, #2244aa);
+        }
+        .colorbar-label {
+            position: absolute; right: 32px; color: #ccc; font-size: 10px; white-space: nowrap;
+        }
+        .colorbar-label.top { top: 0; }
+        .colorbar-label.bottom { bottom: 0; }
+
+        #route-bar {
+            position: absolute; bottom: 12px; left: 50%; transform: translateX(-50%);
+            z-index: 10; background: rgba(10,10,30,0.9); color: #00ffcc;
+            padding: 8px 20px; border-radius: 8px; font-size: 13px; font-weight: 600;
+            border: 1px solid rgba(0,255,200,0.3); display: none; white-space: nowrap;
+        }
+
+        #astar-status {
+            position: absolute; top: 12px; left: 50%; transform: translateX(-50%);
+            z-index: 10; background: rgba(10,10,30,0.9); color: #ffdd57;
+            padding: 8px 20px; border-radius: 8px; font-size: 13px; font-weight: 600;
+            border: 1px solid rgba(255,221,87,0.3); display: none;
+        }
+
+        /* Obstacle mode indicator */
+        .obstacle-active { animation: obsPulse 1s infinite; }
+        @keyframes obsPulse { 0%,100%{box-shadow:0 0 5px #ff4444} 50%{box-shadow:0 0 15px #ff4444} }
+
+        /* Waypoint items */
+        .wp-item {
+            display: flex; align-items: center; gap: 6px;
+            padding: 5px 8px; margin: 3px 0; border-radius: 5px;
+            background: rgba(180, 100, 255, 0.08); border: 1px solid rgba(180, 100, 255, 0.15);
+            cursor: pointer; transition: all 0.2s;
+        }
+        .wp-item:hover { background: rgba(180, 100, 255, 0.15); }
+        .wp-item.active { background: rgba(180, 100, 255, 0.25); border-color: rgba(180, 100, 255, 0.5); }
+        .wp-item input[type="checkbox"] { accent-color: #b464ff; flex-shrink: 0; }
+        .wp-item .wp-name { font-weight: 600; color: #c88aff; font-size: 11px; }
+        .wp-item .wp-dist { color: #888; font-size: 10px; }
+
+        /* Gemini chat */
+        .gemini-messages { display: flex; flex-direction: column; gap: 10px; }
+        .msg { padding: 10px 12px; border-radius: 10px; font-size: 12px; line-height: 1.6; animation: fadeIn 0.3s ease; }
+        .msg-user { background: rgba(74,122,255,0.2); border: 1px solid rgba(74,122,255,0.3); align-self: flex-end; max-width: 90%; }
+        .msg-ai { background: rgba(40,40,60,0.8); border: 1px solid rgba(100,140,255,0.15); }
+        .msg-ai strong { color: #7eb8ff; }
+        .msg-ai em { color: #b464ff; font-style: normal; }
+        .msg-system { background: rgba(0,255,180,0.08); border: 1px solid rgba(0,255,180,0.15); font-size: 11px; color: #66ddaa; }
+        .msg-loading { color: #7eb8ff; font-size: 12px; display: flex; align-items: center; gap: 8px; }
+        .msg-loading .dots { display: inline-flex; gap: 3px; }
+        .msg-loading .dots span { width: 6px; height: 6px; background: #7eb8ff; border-radius: 50%; animation: dotPulse 1.2s infinite; }
+        .msg-loading .dots span:nth-child(2) { animation-delay: 0.2s; }
+        .msg-loading .dots span:nth-child(3) { animation-delay: 0.4s; }
+        @keyframes dotPulse { 0%,80%,100%{opacity:0.3;transform:scale(0.8)} 40%{opacity:1;transform:scale(1.2)} }
+        @keyframes fadeIn { from{opacity:0;transform:translateY(5px)} to{opacity:1;transform:translateY(0)} }
+
+        .gemini-actions { padding: 8px 12px; display: flex; flex-wrap: wrap; gap: 4px; border-top: 1px solid rgba(100,140,255,0.1); }
+        .action-btn {
+            padding: 5px 10px; border: 1px solid rgba(100,140,255,0.2); border-radius: 15px;
+            background: rgba(74,122,255,0.08); color: #8ab4ff; font-size: 10px;
+            cursor: pointer; transition: all 0.2s; white-space: nowrap;
+        }
+        .action-btn:hover { background: rgba(74,122,255,0.2); border-color: rgba(74,122,255,0.4); }
+
+        .gemini-input-area { display: flex; gap: 6px; align-items: flex-end; }
+        .gemini-input-area textarea {
+            flex: 1; height: 44px; background: #16213e; border: 1px solid #333;
+            border-radius: 8px; color: #ddd; padding: 10px; font-size: 12px;
+            resize: none; font-family: inherit; outline: none;
+        }
+        .gemini-input-area textarea:focus { border-color: #4a7aff; }
+        .send-btn {
+            width: 36px; height: 36px; border: none; border-radius: 8px;
+            background: #4a7aff; color: white; cursor: pointer; font-size: 16px;
+            display: flex; align-items: center; justify-content: center; flex-shrink: 0;
+        }
+        .send-btn:hover { background: #5d8bff; }
+        .send-btn:disabled { background: #333; cursor: not-allowed; }
+
+        /* Cost formula footer */
+        .formula-box {
+            background: rgba(0,0,0,0.3); border-radius: 6px; padding: 8px;
+            font-size: 10px; color: #666; line-height: 1.6;
+            border: 1px solid rgba(100,140,255,0.1);
+        }
+        .formula-box code { color: #8ab4ff; }
+    </style>
+</head>
+<body>
+
+<!-- ============ LEFT: GEMINI PANEL ============ -->
+<div id="gemini-panel">
+    <div class="gemini-header">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#7eb8ff" stroke-width="2"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg>
+        Gemini Asistan
+    </div>
+    <div class="gemini-chat" id="gemini-chat">
+        <div class="msg msg-system">Harita yukleyin ve iki nokta secin. Rota analizi otomatik yapilacak.</div>
+    </div>
+    <div class="gemini-actions">
+        <button class="action-btn" onclick="geminiAutoScenario()">Otonom Senaryo</button>
+        <button class="action-btn" onclick="geminiMissionReport()">Misyon Raporu</button>
+        <button class="action-btn" onclick="geminiCompare()">Rota Analizi</button>
+    </div>
+    <div class="gemini-input-area" style="padding:10px 12px;">
+        <textarea id="gemini-input" placeholder="Soru sorun veya komut verin..." onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();sendGeminiMessage()}"></textarea>
+        <button class="send-btn" id="gemini-send" onclick="sendGeminiMessage()">&#9654;</button>
+    </div>
+</div>
+
+<!-- ============ CENTER: 3D VIEWER ============ -->
+<div id="viewer-area">
+    <div id="loading">
+        <div class="spinner"></div>
+        <div>Harita yukleniyor...</div>
+    </div>
+    <div id="astar-status"></div>
+    <div id="route-bar"></div>
+    <div id="colorbar">
+        <div id="colorbar-gradient"></div>
+        <span class="colorbar-label top" id="cb-max"></span>
+        <span class="colorbar-label bottom" id="cb-min"></span>
+    </div>
+    <div id="canvas-container"></div>
+</div>
+
+<!-- ============ RIGHT: CONTROL PANEL ============ -->
+<div id="control-panel">
+    <h3>DM1 Rota Planlayici</h3>
+
+    <!-- FILE SELECTION -->
+    <div class="section">
+        <div class="section-title">Harita Yukle</div>
+        <select id="server-tif" class="ctrl-select">
+            <option value="">-- Sunucudan TIF Sec --</option>
+        </select>
+        <input type="file" id="file-input" accept=".tif,.tiff">
+        <button class="btn btn-primary btn-sm" onclick="document.getElementById('file-input').click()">Diskten Sec</button>
+    </div>
+
+    <!-- FILE INFO -->
+    <div class="section" id="file-info" style="display:none;">
+        <div class="info-box">
+            <div><span class="label">Dosya:</span> <span id="fname"></span></div>
+            <div><span class="label">Cozunurluk:</span> <span id="fres"></span></div>
+        </div>
+    </div>
+
+    <!-- COLOR MODE -->
+    <div class="section" id="color-section" style="display:none;">
+        <div class="section-title">Renk Modu</div>
+        <div style="display:flex; gap:4px; flex-wrap:wrap;">
+            <button class="btn btn-toggle btn-sm active" id="btn-clr-elev" onclick="setColorMode('elevation')">Yukseklik</button>
+            <button class="btn btn-toggle btn-sm" id="btn-clr-bw" onclick="setColorMode('bw')">Ay (B&W)</button>
+            <button class="btn btn-toggle btn-sm" id="btn-clr-light" onclick="setColorMode('light')">Isik Haritasi</button>
+        </div>
+        <div id="light-loader" style="margin-top:6px; display:none;">
+            <select id="light-tif" class="ctrl-select" style="margin-bottom:4px;">
+                <option value="">-- Isik/Slope TIF Sec --</option>
+            </select>
+            <div id="light-info" style="font-size:10px; color:#666;"></div>
+        </div>
+    </div>
+
+    <!-- A* PARAMETERS -->
+    <div class="section" id="params-section" style="display:none;">
+        <div class="section-title">A* Parametreleri</div>
+        <div class="param-row">
+            <label>Egim Esigi</label>
+            <input type="range" id="slope-threshold" min="5" max="40" value="20" step="1">
+            <span class="val" id="slope-threshold-val">20&deg;</span>
+        </div>
+        <div class="param-row">
+            <label>Heuristic Agirlik</label>
+            <input type="range" id="heuristic-weight" min="1" max="40" value="15" step="1">
+            <span class="val" id="heuristic-weight-val">15</span>
+        </div>
+        <div class="param-row">
+            <label>Arac Hizi</label>
+            <input type="range" id="vehicle-speed" min="100" max="5000" value="1000" step="100">
+            <span class="val" id="vehicle-speed-val">1000</span>
+        </div>
+    </div>
+
+    <!-- POINT INFO -->
+    <div class="section" id="points-section" style="display:none;">
+        <div class="section-title">Nokta Secimi</div>
+        <div class="point-info"><span class="dot dot-start"></span> <span id="p1-text">Haritaya tiklayin</span></div>
+        <div class="point-info"><span class="dot dot-end"></span> <span id="p2-text">-</span></div>
+        <div style="margin-top:8px;">
+            <button class="btn btn-danger btn-sm" onclick="resetPoints()">Sifirla</button>
+        </div>
+    </div>
+
+    <!-- LIDAR & OBSTACLES -->
+    <div class="section" id="lidar-section" style="display:none;">
+        <div class="section-title">LIDAR Simulasyonu</div>
+        <button class="btn btn-toggle btn-sm" id="btn-obstacle" onclick="toggleObstacleMode()">Engel Yerlestir</button>
+        <button class="btn btn-danger btn-sm" onclick="clearObstacles()">Engelleri Temizle</button>
+        <div id="lidar-info" style="font-size:11px; color:#888; margin-top:6px;">
+            Engel modu: <span id="obstacle-mode-text" style="color:#ff4444;">Kapali</span>
+            <br>Engel sayisi: <span id="obstacle-count">0</span>
+            <br>LIDAR menzil: 3km
+        </div>
+    </div>
+
+    <!-- CAMERA CONTROLS -->
+    <div class="section" id="camera-section" style="display:none;">
+        <div class="section-title">Kamera</div>
+        <button class="btn btn-toggle btn-sm active" id="btn-cam-free" onclick="setCameraMode('free')">Serbest</button>
+        <button class="btn btn-toggle btn-sm" id="btn-cam-3rd" onclick="setCameraMode('3rd')">3. Sahis</button>
+        <button class="btn btn-toggle btn-sm" id="btn-cam-1st" onclick="setCameraMode('1st')">1. Sahis</button>
+    </div>
+
+    <!-- RESULTS -->
+    <div class="section" id="results-section" style="display:none;">
+        <div class="section-title">Rota Sonuclari</div>
+        <div class="metrics-grid">
+            <div class="metric-card">
+                <div class="metric-value" id="res-distance">-</div>
+                <div class="metric-label">Mesafe</div>
+            </div>
+            <div class="metric-card">
+                <div class="metric-value" id="res-km">-</div>
+                <div class="metric-label">Kilometre</div>
+            </div>
+            <div class="metric-card">
+                <div class="metric-value" id="res-time">-</div>
+                <div class="metric-label">Hesaplama</div>
+            </div>
+            <div class="metric-card">
+                <div class="metric-value" id="res-steps">-</div>
+                <div class="metric-label">Adim</div>
+            </div>
+        </div>
+        <div class="info-box" id="res-travel" style="display:none;"></div>
+    </div>
+
+    <!-- WAYPOINTS -->
+    <div class="section" id="waypoints-section" style="display:none;">
+        <div class="section-title">Bilimsel Waypoint'ler</div>
+        <div class="param-row">
+            <label>Tarama Yaricapi</label>
+            <input type="range" id="wp-radius" min="5" max="60" value="15" step="1">
+            <span class="val" id="wp-radius-val">15 km</span>
+        </div>
+        <div id="wp-list" style="font-size:11px; color:#888; max-height:200px; overflow-y:auto;">
+            Rota hesaplaninca yakin waypoint'ler gorunecek.
+        </div>
+    </div>
+
+    <!-- CONTROLS INFO -->
+    <div class="section">
+        <div class="section-title">Kontroller</div>
+        <div class="info-box">
+            <div>Sol tik: Nokta sec (baslangic/hedef)</div>
+            <div>Sag tik + surukleme: Dondur</div>
+            <div>Scroll: Yakinlastir/Uzaklastir</div>
+        </div>
+    </div>
+
+    <!-- COST FORMULA -->
+    <div class="section">
+        <div class="formula-box">
+            <strong style="color:#8ab4ff;">A* Maliyet Formulu:</strong><br>
+            <code>mesafe &times; egim &times; donus</code><br>
+            Egim: <code>1 + (x/10)&sup2;</code><br>
+            Donus: <code>1 + 0.5&times;(aci/45)&sup2;</code><br>
+            Sert donus (&ge;90&deg;): <code>Yasak</code>
+        </div>
+    </div>
+</div>
+
+<script>
+    // ============ GLOBALS ============
+    let scene, camera, renderer, controls;
+    let terrainGroup = null, terrainTopMesh = null;
+    let markers = [], lineMesh = null, tubeMeshRef = null;
+    let raycaster = new THREE.Raycaster(), mouse = new THREE.Vector2();
+
+    // Vehicle
+    let vehicleModel = null, vehicleCurve = null, vehicleProgress = 0;
+    let vehicleCurveLength = 0, vehicleAnimating = false, lastFrameTime = 0;
+
+    // LIDAR & Obstacles
+    let obstacleMode = false;
+    let obstacleMeshes = [];       // 3D mesh referanslari
+    let rerouteMeshes = [];        // reroute cizim meshleri (silinmez)
+    let obstacleGridMask = null;   // Uint8Array — 1 = engel
+    let lidarLineMesh = null;
+    let lidarHitMesh = null;
+    let goalGridRow = 0, goalGridCol = 0;  // yeniden rotalama icin hedef
+    let isRerouting = false;
+    let lidarCooldownUntil = 0;    // bu progress'e kadar LIDAR taramasi yapma
+
+    // Terrain
+    let terrainWidth = 0, terrainHeight = 0;
+    let elevationMin = 0, elevationMax = 1, heightScale = 1;
+    const PIXEL_SIZE = 10; // crop_circle.js ile 10mpp olarak kesildi
+    let meterPerUnit = PIXEL_SIZE;
+
+    let cachedData = null, cachedW = 0, cachedH = 0, cachedStep = 1;
+    let gridElevData = null, gridW = 0, gridH = 0, gridLiftOffset = 50;
+    let rawElevGrid = null; // metre cinsinden ham yukseklik (A* icin)
+    let slopeGrid = null;   // derece cinsinden egim (A* icin)
+    let bwMode = false;
+    let colorMode = 'elevation'; // 'elevation', 'bw', 'light'
+    let lightMapData = null; // overlay TIF verisi (downsampled, gridW x gridH)
+    let lightMin = 0, lightMax = 1;
+    let cameraMode = 'free', savedCamPos = null, savedCamTarget = null;
+
+    // Overlay grubu — terrainGroup'a eklenir, scale.y ile birlikte hareket eder
+    let overlayGroup = null;
+    function getOverlay() {
+        if (!overlayGroup && terrainGroup) {
+            overlayGroup = new THREE.Group();
+            terrainGroup.add(overlayGroup);
+        }
+        return overlayGroup || scene;
+    }
+
+    // Waypoints
+    const R_MOON = 1737400; // metre
+    const LUNAR_WAYPOINTS = [
+        { id:'shackleton',  name:'Shackleton Ridge',     lat:-89.575, lon:212.5, desc:'Kalici gunesli sirt, enerji istasyonu adayi' },
+        { id:'degerlache',  name:'De Gerlache Mnts',     lat:-88.65,  lon:-40.0, desc:'Yuksek toporafya, radar gozlem noktasi' },
+        { id:'amundsen',    name:'Amundsen-Ganswindt',   lat:-88.65,  lon:105.0, desc:'Derin krater, buzul analiz sahasi' },
+        { id:'haworth',     name:'Haworth-Shoemaker',    lat:-88.55,  lon:20.0,  desc:'Kalici golge krateri, su buzu potansiyeli' },
+        { id:'malapert',    name:'Malapert Massif',      lat:-88.50,  lon:0.0,   desc:'Dunya goruslu iletisim tepesi' },
+        { id:'sverdrup',    name:'Sverdrup Crater',      lat:-88.45,  lon:-155.0,desc:'Golge krateri, volatil madde arastirmasi' },
+        { id:'connecting',  name:'Connecting Ridge',     lat:-89.44,  lon:201.0, desc:'Shackleton baglantisinaal sirt gecidi' },
+        { id:'leibniz',     name:'Leibniz Beta',         lat:-88.20,  lon:330.0, desc:'Yuksek plato, jeolojik ornekleme sahasi' }
+    ];
+    let waypointGridPositions = []; // { ...wp, row, col, worldX, worldZ, marker3d }
+    let waypointMarkers3D = [];
+    let selectedWaypoints = new Set();
+    let lastPathResult = null; // son A* sonucu (proximity icin)
+
+    function latLonToGrid(lat, lon) {
+        if (!gridW || !gridH) return null;
+        const coLatRad = (90 + lat) * Math.PI / 180;
+        const r = 2 * R_MOON * Math.tan(coLatRad / 2); // metre
+        const lonRad = lon * Math.PI / 180;
+        const xProj = r * Math.sin(lonRad);
+        const yProj = r * Math.cos(lonRad);
+        const radius = Math.min(gridW, gridH) / 2;
+        const mapRadiusM = 60700; // crop_circle.js ile kesilen yaricap
+        const mPerGrid = mapRadiusM / radius;
+        const col = xProj / mPerGrid + gridW / 2;
+        const row = gridH / 2 - yProj / mPerGrid;
+        return { row: Math.round(row), col: Math.round(col) };
+    }
+
+    function placeWaypointMarkers() {
+        // Onceki marker'lari temizle
+        waypointMarkers3D.forEach(m => { getOverlay().remove(m); m.traverse(c => { if(c.geometry)c.geometry.dispose(); if(c.material)c.material.dispose(); }); });
+        waypointMarkers3D = [];
+        waypointGridPositions = [];
+
+        const radius = Math.min(gridW, gridH) / 2;
+        const halfW = gridW/2, halfH = gridH/2;
+
+        LUNAR_WAYPOINTS.forEach(wp => {
+            const pos = latLonToGrid(wp.lat, wp.lon);
+            if (!pos) return;
+            const dx = pos.col - halfW, dz = pos.row - halfH;
+            if (dx*dx + dz*dz > radius*radius * 0.95) return; // daire disinda
+
+            const worldX = pos.col - halfW;
+            const worldZ = pos.row - halfH;
+            const worldY = getTerrainY(worldX, worldZ);
+
+            // Diamond seklinde marker
+            const group = new THREE.Group();
+
+            // Dikey cizgi
+            const lineG = new THREE.BufferGeometry();
+            lineG.setAttribute('position', new THREE.Float32BufferAttribute([0, 0, 0, 0, 15, 0], 3));
+            group.add(new THREE.Line(lineG, new THREE.LineBasicMaterial({ color: 0xb464ff })));
+
+            // Ust diamond
+            const diaG = new THREE.OctahedronGeometry(2.5, 0);
+            const diaM = new THREE.MeshPhongMaterial({ color: 0xb464ff, emissive: 0x6622aa, emissiveIntensity: 0.5, transparent: true, opacity: 0.85 });
+            const dia = new THREE.Mesh(diaG, diaM);
+            dia.position.y = 17;
+            group.add(dia);
+
+            // Halo ring
+            const haloG = new THREE.TorusGeometry(4, 0.3, 8, 32);
+            const haloM = new THREE.MeshPhongMaterial({ color: 0xb464ff, emissive: 0xb464ff, emissiveIntensity: 0.3, transparent: true, opacity: 0.4 });
+            const halo = new THREE.Mesh(haloG, haloM);
+            halo.rotation.x = -Math.PI / 2;
+            group.add(halo);
+
+            group.position.set(worldX, worldY, worldZ);
+            getOverlay().add(group);
+            waypointMarkers3D.push(group);
+            waypointGridPositions.push({ ...wp, row: pos.row, col: pos.col, worldX, worldZ, marker3d: group });
+        });
+    }
+
+    function checkNearbyWaypoints(routePath) {
+        lastPathResult = routePath;
+        const wpRadiusKm = parseFloat(document.getElementById('wp-radius').value);
+        const mapRadius = Math.min(gridW, gridH) / 2;
+        const mPerGrid = 60700 / mapRadius;
+        const wpRadiusGrid = (wpRadiusKm * 1000) / mPerGrid;
+
+        const listEl = document.getElementById('wp-list');
+        const nearby = [];
+
+        waypointGridPositions.forEach(wp => {
+            // Rota uzerindeki en yakin noktaya mesafe
+            let minDist = Infinity;
+            for (let i = 0; i < routePath.length; i += Math.max(1, Math.floor(routePath.length/200))) {
+                const [pr, pc] = routePath[i];
+                const d = Math.sqrt((wp.row-pr)**2 + (wp.col-pc)**2);
+                if (d < minDist) minDist = d;
+            }
+            const distKm = (minDist * mPerGrid) / 1000;
+            if (minDist <= wpRadiusGrid) {
+                nearby.push({ ...wp, distKm, distGrid: minDist });
+            }
+        });
+
+        if (nearby.length === 0) {
+            listEl.innerHTML = '<div style="color:#666; padding:4px;">Yakin waypoint bulunamadi. Tarama yaricapini artirin.</div>';
+            return;
+        }
+
+        nearby.sort((a, b) => a.distKm - b.distKm);
+        let html = '';
+        nearby.forEach(wp => {
+            const checked = selectedWaypoints.has(wp.id) ? 'checked' : '';
+            const activeClass = selectedWaypoints.has(wp.id) ? ' active' : '';
+            html += `<label class="wp-item${activeClass}" data-id="${wp.id}">
+                <input type="checkbox" ${checked} onchange="toggleWaypoint('${wp.id}')">
+                <div>
+                    <div class="wp-name">${wp.name}</div>
+                    <div class="wp-dist">~${wp.distKm.toFixed(1)} km rotadan | ${wp.desc}</div>
+                </div>
+            </label>`;
+        });
+        listEl.innerHTML = html;
+    }
+
+    function toggleWaypoint(wpId) {
+        if (selectedWaypoints.has(wpId)) selectedWaypoints.delete(wpId);
+        else selectedWaypoints.add(wpId);
+
+        // Rota yeniden hesapla
+        if (markers.length === 2) recomputeRouteWithWaypoints();
+    }
+
+    function recomputeRouteWithWaypoints() {
+        // Onceki cizimi temizle
+        if (lineMesh) { getOverlay().remove(lineMesh); lineMesh.geometry.dispose(); lineMesh.material.dispose(); lineMesh = null; }
+        if (tubeMeshRef) { getOverlay().remove(tubeMeshRef); tubeMeshRef.geometry.dispose(); tubeMeshRef.material.dispose(); tubeMeshRef = null; }
+        if (vehicleModel) { getOverlay().remove(vehicleModel); vehicleModel = null; }
+        vehicleAnimating = false;
+
+        const p1 = markers[0].position, p2 = markers[1].position;
+        const startCol = Math.round(p1.x + gridW/2), startRow = Math.round(p1.z + gridH/2);
+        const goalCol = Math.round(p2.x + gridW/2), goalRow = Math.round(p2.z + gridH/2);
+
+        // Secili waypoint'leri rotaya ekle (baslangica yakinlikla sirala)
+        const wpNodes = [];
+        waypointGridPositions.forEach(wp => {
+            if (!selectedWaypoints.has(wp.id)) return;
+            wpNodes.push({ row: wp.row, col: wp.col, name: wp.name });
+        });
+
+        // Waypoint'leri baslangica en yakindan en uzaga sirala
+        if (wpNodes.length > 1) {
+            // Greedy nearest neighbor siralama
+            const ordered = [];
+            let curR = startRow, curC = startCol;
+            const remaining = [...wpNodes];
+            while (remaining.length > 0) {
+                let bestIdx = 0, bestDist = Infinity;
+                for (let i = 0; i < remaining.length; i++) {
+                    const d = Math.hypot(remaining[i].row - curR, remaining[i].col - curC);
+                    if (d < bestDist) { bestDist = d; bestIdx = i; }
+                }
+                ordered.push(remaining[bestIdx]);
+                curR = remaining[bestIdx].row;
+                curC = remaining[bestIdx].col;
+                remaining.splice(bestIdx, 1);
+            }
+            wpNodes.length = 0;
+            wpNodes.push(...ordered);
+        }
+
+        // Segment listesi: start -> wp1 -> wp2 -> ... -> goal
+        const segments = [];
+        let prevR = startRow, prevC = startCol;
+        wpNodes.forEach(wp => {
+            segments.push({ fromR: prevR, fromC: prevC, toR: wp.row, toC: wp.col, label: wp.name });
+            prevR = wp.row; prevC = wp.col;
+        });
+        segments.push({ fromR: prevR, fromC: prevC, toR: goalRow, toC: goalCol, label: 'Hedef' });
+
+        const statusEl = document.getElementById('astar-status');
+        statusEl.textContent = `A* hesaplaniyor (${segments.length} segment)...`;
+        statusEl.style.display = 'block';
+
+        setTimeout(() => {
+            const t0 = performance.now();
+            let fullPath = [];
+            let totalIter = 0;
+            let failed = false;
+
+            for (let i = 0; i < segments.length; i++) {
+                const seg = segments[i];
+                statusEl.textContent = `Segment ${i+1}/${segments.length}: ${seg.label}...`;
+                const result = astarSearch(seg.fromR, seg.fromC, seg.toR, seg.toC);
+                if (!result) {
+                    failed = true;
+                    statusEl.style.display = 'none';
+                    document.getElementById('route-bar').textContent = `Rota bulunamadi (segment: ${seg.label})`;
+                    document.getElementById('route-bar').style.display = 'block';
+                    document.getElementById('route-bar').style.color = '#ff4444';
+                    return;
+                }
+                totalIter += result.iterations;
+                // Ilk segment disinda ilk noktayi atla (onceki segment'in sonu ile ayni)
+                const segPath = i === 0 ? result.path : result.path.slice(1);
+                fullPath.push(...segPath);
+            }
+
+            const elapsed = ((performance.now() - t0) / 1000).toFixed(2);
+            statusEl.style.display = 'none';
+
+            // Ciz
+            drawAstarRoute(fullPath, elapsed, totalIter);
+        }, 50);
+    }
+
+    // A* params (UI'den okunur)
+    function getParams() {
+        return {
+            slopeThreshold: parseFloat(document.getElementById('slope-threshold').value),
+            heuristicWeight: parseFloat(document.getElementById('heuristic-weight').value),
+            vehicleSpeed: parseFloat(document.getElementById('vehicle-speed').value)
+        };
+    }
+
+    // ============ PARAM SLIDERS ============
+    document.getElementById('slope-threshold').addEventListener('input', e => {
+        document.getElementById('slope-threshold-val').innerHTML = e.target.value + '&deg;';
+    });
+    document.getElementById('heuristic-weight').addEventListener('input', e => {
+        document.getElementById('heuristic-weight-val').textContent = e.target.value;
+    });
+    document.getElementById('vehicle-speed').addEventListener('input', e => {
+        document.getElementById('vehicle-speed-val').textContent = e.target.value;
+    });
+    document.getElementById('wp-radius').addEventListener('input', e => {
+        document.getElementById('wp-radius-val').textContent = e.target.value + ' km';
+        // Radius degisince yakindaki waypoint'leri yeniden tara
+        if (lastPathResult) checkNearbyWaypoints(lastPathResult);
+    });
+
+    // ============ THREE.JS SCENE ============
+    function initScene() {
+        scene = new THREE.Scene();
+        scene.background = new THREE.Color(0x000000);
+
+        // Yildizlar
+        const starCount = 3000;
+        const starVerts = new Float32Array(starCount * 3);
+        for (let i = 0; i < starCount; i++) {
+            const theta = Math.random() * Math.PI * 2;
+            const phi = Math.acos(2 * Math.random() - 1);
+            const r = 4000 + Math.random() * 1000;
+            starVerts[i*3]     = r * Math.sin(phi) * Math.cos(theta);
+            starVerts[i*3 + 1] = r * Math.sin(phi) * Math.sin(theta);
+            starVerts[i*3 + 2] = r * Math.cos(phi);
+        }
+        const starGeom = new THREE.BufferGeometry();
+        starGeom.setAttribute('position', new THREE.Float32BufferAttribute(starVerts, 3));
+        scene.add(new THREE.Points(starGeom, new THREE.PointsMaterial({ color: 0xffffff, size: 2, sizeAttenuation: true })));
+
+        const viewerArea = document.getElementById('viewer-area');
+        const vw = viewerArea.clientWidth, vh = viewerArea.clientHeight;
+
+        camera = new THREE.PerspectiveCamera(60, vw / vh, 0.1, 10000);
+        camera.position.set(0, 150, 200);
+
+        renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.outputEncoding = THREE.sRGBEncoding;
+        renderer.setSize(vw, vh);
+        renderer.setPixelRatio(window.devicePixelRatio);
+        document.getElementById('canvas-container').appendChild(renderer.domElement);
+
+        controls = new THREE.OrbitControls(camera, renderer.domElement);
+        controls.enableDamping = true;
+        controls.dampingFactor = 0.08;
+        controls.maxPolarAngle = Math.PI * 0.85;
+
+        scene.add(new THREE.AmbientLight(0x404060, 0.6));
+        const d1 = new THREE.DirectionalLight(0xffffff, 1.0); d1.position.set(100, 200, 100); scene.add(d1);
+        const d2 = new THREE.DirectionalLight(0x8888ff, 0.3); d2.position.set(-100, 100, -100); scene.add(d2);
+        const d3 = new THREE.DirectionalLight(0x4466aa, 0.4); d3.position.set(0, -100, 0); scene.add(d3);
+
+        // Dairesel grid
+        const gridGroup = new THREE.Group();
+        const gridMat = new THREE.LineBasicMaterial({ color: 0x222244, transparent: true, opacity: 0.5 });
+        for (let r = 50; r <= 250; r += 50) {
+            const pts = [];
+            for (let i = 0; i <= 128; i++) { const a = (i/128)*Math.PI*2; pts.push(Math.cos(a)*r, 0, Math.sin(a)*r); }
+            const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(pts, 3));
+            gridGroup.add(new THREE.Line(g, gridMat));
+        }
+        for (let i = 0; i < 12; i++) {
+            const a = (i/12)*Math.PI*2;
+            const g = new THREE.BufferGeometry();
+            g.setAttribute('position', new THREE.Float32BufferAttribute([0,0,0, Math.cos(a)*250, 0, Math.sin(a)*250], 3));
+            gridGroup.add(new THREE.Line(g, gridMat));
+        }
+        scene.add(gridGroup);
+
+        window.addEventListener('resize', onResize);
+        renderer.domElement.addEventListener('click', onCanvasClick);
+        animate();
+    }
+
+    function onResize() {
+        const va = document.getElementById('viewer-area');
+        camera.aspect = va.clientWidth / va.clientHeight;
+        camera.updateProjectionMatrix();
+        renderer.setSize(va.clientWidth, va.clientHeight);
+    }
+
+    function animate(time) {
+        requestAnimationFrame(animate);
+        if (vehicleAnimating && vehicleModel && vehicleCurve) {
+            const dt = lastFrameTime ? (time - lastFrameTime) / 1000 : 0;
+            lastFrameTime = time;
+            const params = getParams();
+            const sceneSpeed = params.vehicleSpeed / meterPerUnit;
+            vehicleProgress += (sceneSpeed * dt) / vehicleCurveLength;
+            if (vehicleProgress >= 1) vehicleProgress = 0;
+            const pos = vehicleCurve.getPointAt(vehicleProgress);
+            vehicleModel.position.copy(pos);
+            const ahead = Math.min(vehicleProgress + 0.005, 0.999);
+            const nextPos = vehicleCurve.getPointAt(ahead);
+            vehicleModel.lookAt(nextPos);
+            vehicleModel.rotateX(Math.PI);
+            vehicleModel.rotateX(Math.PI / 2);
+            // LIDAR taramasi
+            updateLidar(pos, nextPos);
+            // Kamera takibi icin lokal → dunya koordinati
+            const worldPos = terrainGroup.localToWorld(pos.clone());
+            const worldNext = terrainGroup.localToWorld(nextPos.clone());
+            if (cameraMode === '3rd') {
+                const dir = new THREE.Vector3().subVectors(worldNext, worldPos).normalize();
+                const co = dir.clone().multiplyScalar(-55); co.y += 35;
+                camera.position.lerp(worldPos.clone().add(co), 0.08);
+                controls.target.lerp(worldPos, 0.08);
+            } else if (cameraMode === '1st') {
+                const ep = worldPos.clone(); ep.y += 12;
+                camera.position.lerp(ep, 0.15);
+                const lt = worldNext.clone(); lt.y += 12;
+                controls.target.lerp(lt, 0.15);
+            }
+        }
+        controls.update();
+        renderer.render(scene, camera);
+    }
+
+    // ============ GEOTIFF LOADING ============
+    fetch('/api/tif-list').then(r => r.json()).then(files => {
+        const sel = document.getElementById('server-tif');
+        const lightSel = document.getElementById('light-tif');
+        const MAX_SIZE = 200 * 1024 * 1024; // 200MB ustu dosyalari gosterme
+        files.forEach(f => {
+            if (f.size > MAX_SIZE) return; // buyuk dosyalari atla
+            const opt = document.createElement('option');
+            opt.value = 'Site01/' + f.name;
+            opt.textContent = f.name + ' (' + (f.size/(1024*1024)).toFixed(0) + ' MB)';
+            sel.appendChild(opt);
+            lightSel.appendChild(opt.cloneNode(true));
+        });
+    }).catch(() => {});
+
+    document.getElementById('light-tif').addEventListener('change', async e => {
+        if (e.target.value && gridW > 0) await loadLightTIF(e.target.value);
+    });
+
+    document.getElementById('server-tif').addEventListener('change', async e => {
+        if (e.target.value) await loadTIF(null, e.target.value);
+    });
+    document.getElementById('file-input').addEventListener('change', async e => {
+        if (e.target.files[0]) await loadTIF(e.target.files[0], null);
+    });
+
+    async function loadTIF(file, url) {
+        if (!file && !url) return;
+        const loading = document.getElementById('loading');
+        const loadingText = loading.querySelector('div:last-child');
+        loading.style.display = 'block';
+        loadingText.textContent = 'GeoTIFF aciliyor...';
+
+        try {
+            let tiff;
+            if (url) {
+                loadingText.textContent = 'Dosya indiriliyor...';
+                const resp = await fetch(url);
+                if (!resp.ok) throw new Error('Dosya indirilemedi: ' + resp.status);
+                const ab = await resp.arrayBuffer();
+                tiff = await GeoTIFF.fromArrayBuffer(ab);
+            } else {
+                const fab = await file.arrayBuffer();
+                tiff = await GeoTIFF.fromArrayBuffer(fab);
+            }
+            const image = await tiff.getImage();
+            const width = image.getWidth(), height = image.getHeight();
+            const fileName = url ? url.split('/').pop() : file.name;
+
+            loadingText.textContent = `${width}x${height} - Veri okunuyor...`;
+
+            const rasters = await image.readRasters();
+            const srcData = rasters[0];
+
+            // Downsample if needed
+            const step = Math.max(1, Math.ceil(Math.max(width, height) / 512));
+            const outW = Math.floor(width / step), outH = Math.floor(height / step);
+            let data;
+            if (step === 1) {
+                data = srcData;
+            } else {
+                data = new Float32Array(outW * outH);
+                for (let oy = 0; oy < outH; oy++)
+                    for (let ox = 0; ox < outW; ox++)
+                        data[oy * outW + ox] = srcData[(oy * step) * width + (ox * step)];
+            }
+
+            loadingText.textContent = 'Arazi modeli olusturuluyor...';
+            await new Promise(r => setTimeout(r, 0));
+
+            terrainWidth = outW; terrainHeight = outH;
+            document.getElementById('fname').textContent = fileName;
+            document.getElementById('fres').textContent = `${width}x${height} px (${outW}x${outH})`;
+            document.getElementById('file-info').style.display = 'block';
+            document.getElementById('params-section').style.display = 'block';
+            document.getElementById('points-section').style.display = 'block';
+            document.getElementById('waypoints-section').style.display = 'block';
+            document.getElementById('color-section').style.display = 'block';
+
+            cachedData = data; cachedW = outW; cachedH = outH; cachedStep = 1;
+            meterPerUnit = step * PIXEL_SIZE;
+            buildSolidTerrain(data, outW, outH, 1);
+            placeWaypointMarkers();
+
+        } catch (err) {
+            alert('TIF hata: ' + (err.message || err));
+            console.error('TIF loadTIF error:', err, err.stack);
+        } finally {
+            loading.style.display = 'none';
+        }
+    }
+
+    // ============ ALPHA FADE ============
+    function patchMaterialWithAlpha(mat) {
+        mat.transparent = true; mat.depthWrite = true;
+        mat.onBeforeCompile = (shader) => {
+            shader.vertexShader = shader.vertexShader.replace('void main() {',
+                'attribute float alpha;\nvarying float vAlpha;\nvoid main() {\nvAlpha = alpha;');
+            shader.fragmentShader = shader.fragmentShader.replace('void main() {',
+                'varying float vAlpha;\nvoid main() {');
+            shader.fragmentShader = shader.fragmentShader.replace('#include <output_fragment>',
+                '#include <output_fragment>\ngl_FragColor.a *= vAlpha;\nif (gl_FragColor.a < 0.01) discard;');
+        };
+    }
+
+    // ============ TERRAIN BUILDER (DAIRESEL) ============
+    function buildSolidTerrain(data, width, height, step) {
+        if (terrainGroup) {
+            terrainGroup.traverse(c => { if (c.geometry) c.geometry.dispose(); if (c.material) c.material.dispose(); });
+            scene.remove(terrainGroup);
+        }
+        resetPoints();
+        terrainGroup = new THREE.Group();
+        overlayGroup = new THREE.Group();
+        terrainGroup.add(overlayGroup);
+
+        const w = Math.floor(width/step), h = Math.floor(height/step);
+        const halfW = w/2, halfH = h/2;
+        const radius = Math.min(halfW, halfH);
+
+        // Min/max (daire ici)
+        let min = Infinity, max = -Infinity;
+        for (let iy = 0; iy < h; iy++) {
+            for (let ix = 0; ix < w; ix++) {
+                const dx = ix - halfW, dz = iy - halfH;
+                if (dx*dx + dz*dz > radius*radius) continue;
+                const v = data[(iy*step)*width + (ix*step)];
+                if (isNaN(v) || v < -1e10 || v > 1e10 || v === 0) continue;
+                if (v < min) min = v; if (v > max) max = v;
+            }
+        }
+        if (min === Infinity) { min = 0; max = 1; }
+        elevationMin = min; elevationMax = max;
+        const range = max - min || 1;
+        heightScale = (radius * 2 * 0.3) / range * 0.35;
+        const liftOffset = 50, maxElevHeight = range * heightScale, baseY = -liftOffset;
+        const fadeBand = radius * 0.08;
+
+        // Elevation grid + raw elevation + slope
+        const elevGrid = new Float32Array(w * h);
+        rawElevGrid = new Float32Array(w * h);
+        for (let iy = 0; iy < h; iy++) {
+            for (let ix = 0; ix < w; ix++) {
+                const si = (iy*step)*width + (ix*step);
+                let elev = data[si];
+                if (isNaN(elev) || elev < -1e10 || elev > 1e10) elev = min;
+                if (elev === 0) elev = min;
+                elevGrid[iy*w + ix] = (elev - min) * heightScale;
+                rawElevGrid[iy*w + ix] = elev; // metre cinsinden
+            }
+        }
+
+        // Slope hesapla (derece)
+        slopeGrid = new Float32Array(w * h);
+        for (let iy = 1; iy < h-1; iy++) {
+            for (let ix = 1; ix < w-1; ix++) {
+                const dEdx = (rawElevGrid[iy*w + ix+1] - rawElevGrid[iy*w + ix-1]) / (2 * meterPerUnit);
+                const dEdz = (rawElevGrid[(iy+1)*w + ix] - rawElevGrid[(iy-1)*w + ix]) / (2 * meterPerUnit);
+                slopeGrid[iy*w + ix] = Math.atan(Math.sqrt(dEdx*dEdx + dEdz*dEdz)) * 180 / Math.PI;
+            }
+        }
+
+        gridElevData = elevGrid; gridW = w; gridH = h; gridLiftOffset = liftOffset;
+
+        // TOP SURFACE
+        const topGeom = new THREE.PlaneBufferGeometry(w, h, w-1, h-1);
+        topGeom.rotateX(-Math.PI / 2);
+        const tv = topGeom.attributes.position.array;
+        const tc = new Float32Array(tv.length), ta = new Float32Array(w*h);
+        for (let iy = 0; iy < h; iy++) {
+            for (let ix = 0; ix < w; ix++) {
+                const vi = (iy*w+ix)*3;
+                const elev = elevGrid[iy*w+ix];
+                tv[vi+1] = elev;
+                const t = elev / (range * heightScale);
+                const col = elevationColor(t, iy*w+ix);
+                tc[vi] = col.r; tc[vi+1] = col.g; tc[vi+2] = col.b;
+                const dx = ix - halfW, dz = iy - halfH;
+                const dist = Math.sqrt(dx*dx + dz*dz);
+                ta[iy*w+ix] = dist > radius ? 0 : dist > radius-fadeBand ? (radius-dist)/fadeBand : 1.0;
+            }
+        }
+        topGeom.setAttribute('color', new THREE.BufferAttribute(tc, 3));
+        topGeom.setAttribute('alpha', new THREE.BufferAttribute(ta, 1));
+        const oldIdx = topGeom.index.array, newIdx = [];
+        for (let i = 0; i < oldIdx.length; i += 3) {
+            if (ta[oldIdx[i]] > 0 || ta[oldIdx[i+1]] > 0 || ta[oldIdx[i+2]] > 0) newIdx.push(oldIdx[i], oldIdx[i+1], oldIdx[i+2]);
+        }
+        topGeom.setIndex(newIdx);
+        topGeom.computeVertexNormals();
+        const topMat = new THREE.MeshPhongMaterial({ vertexColors: true, shininess: 20, side: THREE.FrontSide });
+        patchMaterialWithAlpha(topMat);
+        terrainTopMesh = new THREE.Mesh(topGeom, topMat);
+        terrainGroup.add(terrainTopMesh);
+
+        // BOTTOM
+        const bg = new THREE.CircleBufferGeometry(radius, 128); bg.rotateX(Math.PI/2);
+        const bm = new THREE.Mesh(bg, new THREE.MeshPhongMaterial({ color: 0x2a2a3e, shininess: 10 }));
+        bm.position.y = baseY; terrainGroup.add(bm);
+
+        // SIDE WALL
+        const ws = 256, wv = [], wn = [];
+        for (let i = 0; i < ws; i++) {
+            const a0 = (i/ws)*Math.PI*2, a1 = ((i+1)/ws)*Math.PI*2;
+            const c0 = Math.cos(a0), s0 = Math.sin(a0), c1 = Math.cos(a1), s1 = Math.sin(a1);
+            const x0 = c0*radius, z0 = s0*radius, x1 = c1*radius, z1 = s1*radius;
+            const gx0 = Math.round(x0+halfW), gz0 = Math.round(z0+halfH);
+            const gx1 = Math.round(x1+halfW), gz1 = Math.round(z1+halfH);
+            const ty0 = elevGrid[Math.min(h-1,Math.max(0,gz0))*w + Math.min(w-1,Math.max(0,gx0))];
+            const ty1 = elevGrid[Math.min(h-1,Math.max(0,gz1))*w + Math.min(w-1,Math.max(0,gx1))];
+            wv.push(x0,ty0,z0, x0,baseY,z0, x1,ty1,z1, x1,ty1,z1, x0,baseY,z0, x1,baseY,z1);
+            wn.push(c0,0,s0, c0,0,s0, c1,0,s1, c1,0,s1, c0,0,s0, c1,0,s1);
+        }
+        const wg = new THREE.BufferGeometry();
+        wg.setAttribute('position', new THREE.Float32BufferAttribute(wv, 3));
+        wg.setAttribute('normal', new THREE.Float32BufferAttribute(wn, 3));
+        terrainGroup.add(new THREE.Mesh(wg, new THREE.MeshPhongMaterial({ color: 0x3a3a50, shininess: 10, side: THREE.DoubleSide })));
+
+        terrainGroup.position.y = liftOffset;
+        scene.add(terrainGroup);
+
+        const dist = radius * 1.6;
+        camera.position.set(dist*0.4, dist*0.5, dist*0.7);
+        controls.target.set(0, liftOffset + maxElevHeight*0.3, 0);
+        controls.update();
+
+        document.getElementById('colorbar').style.display = 'block';
+        document.getElementById('cb-max').textContent = elevationMax.toFixed(1);
+        document.getElementById('cb-min').textContent = elevationMin.toFixed(1);
+
+        // Engel maskesi initialize
+        obstacleGridMask = new Uint8Array(w * h);
+        document.getElementById('lidar-section').style.display = 'block';
+    }
+
+    function elevationColor(t, gridIdx) {
+        if (colorMode === 'bw') { const v = 0.15 + t * 0.75; return {r:v,g:v,b:v}; }
+        if (colorMode === 'light' && lightMapData && gridIdx !== undefined) {
+            return lightColor(gridIdx);
+        }
+        let r,g,b;
+        if (t<0.2){const s=t/0.2;r=0.13+s*0.14;g=0.17+s*0.36;b=0.66-s*0.33;}
+        else if(t<0.4){const s=(t-0.2)/0.2;r=0.27;g=0.53+s*0.47;b=0.33;}
+        else if(t<0.6){const s=(t-0.4)/0.2;r=0.27+s*0.73;g=1.0;b=0.33-s*0.33;}
+        else if(t<0.8){const s=(t-0.6)/0.2;r=1.0;g=1.0-s*0.33;b=0.0;}
+        else{const s=(t-0.8)/0.2;r=1.0;g=0.67-s*0.4;b=0.0;}
+        return {r,g,b};
+    }
+
+    // Inferno-benzeri renk skalasi (koyu -> sari)
+    function lightColor(gridIdx) {
+        const v = lightMapData[gridIdx];
+        const range = lightMax - lightMin || 1;
+        const t = Math.max(0, Math.min(1, (v - lightMin) / range));
+        let r, g, b;
+        if (t < 0.25) {
+            const s = t / 0.25;
+            r = 0.0 + s * 0.33; g = 0.0 + s * 0.01; b = 0.02 + s * 0.33;
+        } else if (t < 0.5) {
+            const s = (t - 0.25) / 0.25;
+            r = 0.33 + s * 0.55; g = 0.01 + s * 0.15; b = 0.35 - s * 0.15;
+        } else if (t < 0.75) {
+            const s = (t - 0.5) / 0.25;
+            r = 0.88 + s * 0.12; g = 0.16 + s * 0.48; b = 0.20 - s * 0.18;
+        } else {
+            const s = (t - 0.75) / 0.25;
+            r = 1.0; g = 0.64 + s * 0.36; b = 0.02 + s * 0.5;
+        }
+        return { r, g, b };
+    }
+
+    function setColorMode(mode) {
+        if (mode === 'light' && !lightMapData) {
+            document.getElementById('light-loader').style.display = 'block';
+            addChatMessage('Isik haritasi icin bir TIF dosyasi secin (ornegin ldsm slope haritasi).', 'system');
+            return;
+        }
+        colorMode = mode;
+        bwMode = (mode === 'bw');
+        document.getElementById('btn-clr-elev').classList.toggle('active', mode === 'elevation');
+        document.getElementById('btn-clr-bw').classList.toggle('active', mode === 'bw');
+        document.getElementById('btn-clr-light').classList.toggle('active', mode === 'light');
+        document.getElementById('light-loader').style.display = mode === 'light' ? 'block' : 'none';
+        const g = document.getElementById('colorbar-gradient');
+        if (mode === 'bw') {
+            g.style.background = 'linear-gradient(to bottom, #e6e6e6, #bbb, #888, #555, #333, #262626)';
+        } else if (mode === 'light') {
+            g.style.background = 'linear-gradient(to bottom, #ffffcc, #fd8d3c, #e31a1c, #800026)';
+        } else {
+            g.style.background = 'linear-gradient(to bottom, #ff4444, #ffaa00, #ffff00, #44ff44, #4488ff, #2244aa)';
+        }
+        if (cachedData) { buildSolidTerrain(cachedData, cachedW, cachedH, cachedStep); placeWaypointMarkers(); }
+    }
+
+    // Isik/Slope overlay TIF yukleme
+    async function loadLightTIF(url) {
+        const info = document.getElementById('light-info');
+        info.textContent = 'Dosya indiriliyor...';
+        try {
+            const resp = await fetch(url);
+            const ab = await resp.arrayBuffer();
+            const tiff = await GeoTIFF.fromArrayBuffer(ab);
+            const image = await tiff.getImage();
+            const w = image.getWidth(), h = image.getHeight();
+
+            info.textContent = `${w}x${h} okunuyor...`;
+            const rasters = await image.readRasters();
+            const srcData = rasters[0];
+
+            const stepX = w / gridW, stepY = h / gridH;
+            lightMapData = new Float32Array(gridW * gridH);
+            let lMin = Infinity, lMax = -Infinity;
+
+            for (let iy = 0; iy < gridH; iy++) {
+                for (let ix = 0; ix < gridW; ix++) {
+                    const srcX = Math.min(w - 1, Math.round(ix * stepX));
+                    const srcY = Math.min(h - 1, Math.round(iy * stepY));
+                    const v = srcData[srcY * w + srcX];
+                    lightMapData[iy * gridW + ix] = v;
+                    if (!isNaN(v) && v !== 0) {
+                        if (v < lMin) lMin = v;
+                        if (v > lMax) lMax = v;
+                    }
+                }
+            }
+
+            lightMin = lMin === Infinity ? 0 : lMin;
+            lightMax = lMax === -Infinity ? 1 : lMax;
+            info.textContent = `${w}x${h} -> ${gridW}x${gridH} | ${lightMin.toFixed(1)} - ${lightMax.toFixed(1)}`;
+            setColorMode('light');
+        } catch (e) {
+            info.textContent = 'Hata: ' + e.message;
+            console.error(e);
+        }
+    }
+
+    function setCameraMode(mode) {
+        if (cameraMode === 'free' && mode !== 'free') { savedCamPos = camera.position.clone(); savedCamTarget = controls.target.clone(); }
+        cameraMode = mode;
+        document.getElementById('btn-cam-free').classList.toggle('active', mode==='free');
+        document.getElementById('btn-cam-3rd').classList.toggle('active', mode==='3rd');
+        document.getElementById('btn-cam-1st').classList.toggle('active', mode==='1st');
+        if (mode==='free' && savedCamPos) { camera.position.copy(savedCamPos); controls.target.copy(savedCamTarget); controls.update(); }
+        camera.fov = mode==='1st' ? 90 : mode==='3rd' ? 75 : 60;
+        camera.updateProjectionMatrix();
+    }
+
+    // ============ BILINEAR ELEVATION LOOKUP ============
+    // Lokal koordinat (terrainGroup icinde) — liftOffset DAHIL DEGIL
+    function getTerrainY(wx, wz) {
+        const gx = wx + gridW/2, gz = wz + gridH/2;
+        const ix = Math.max(0, Math.min(gridW-2, Math.floor(gx)));
+        const iy = Math.max(0, Math.min(gridH-2, Math.floor(gz)));
+        const fx = gx-ix, fz = gz-iy;
+        return gridElevData[iy*gridW+ix]*(1-fx)*(1-fz) + gridElevData[iy*gridW+ix+1]*fx*(1-fz)
+             + gridElevData[(iy+1)*gridW+ix]*(1-fx)*fz + gridElevData[(iy+1)*gridW+ix+1]*fx*fz;
+    }
+
+    // ============ A* PATHFINDER (JS PORT) ============
+    // MinHeap
+    class MinHeap {
+        constructor() { this.data = []; }
+        push(item) { this.data.push(item); this._up(this.data.length-1); }
+        pop() { const top = this.data[0]; const last = this.data.pop(); if(this.data.length>0){this.data[0]=last;this._down(0);} return top; }
+        get size() { return this.data.length; }
+        _up(i) { while(i>0){ const p=((i-1)>>>1); if(this.data[p][0]<=this.data[i][0])break; [this.data[p],this.data[i]]=[this.data[i],this.data[p]]; i=p; } }
+        _down(i) { const n=this.data.length; while(true){ let s=i; const l=2*i+1,r=2*i+2; if(l<n&&this.data[l][0]<this.data[s][0])s=l; if(r<n&&this.data[r][0]<this.data[s][0])s=r; if(s===i)break; [this.data[s],this.data[i]]=[this.data[i],this.data[s]]; i=s; } }
+    }
+
+    const SQRT2 = Math.sqrt(2), SQRT5 = Math.sqrt(5);
+    const DIRECTIONS = [
+        [0,1,1],[0,-1,1],[1,0,1],[-1,0,1],
+        [1,1,SQRT2],[1,-1,SQRT2],[-1,1,SQRT2],[-1,-1,SQRT2],
+        [2,1,SQRT5],[2,-1,SQRT5],[-2,1,SQRT5],[-2,-1,SQRT5],
+        [1,2,SQRT5],[1,-2,SQRT5],[-1,2,SQRT5],[-1,-2,SQRT5]
+    ];
+
+    function slopeMultiplier(s) { return 1.0 + (s/10.0)**2; }
+
+    function turnMultiplier(inDr, inDc, outDr, outDc) {
+        if (inDr===0 && inDc===0) return 1.0;
+        if (inDr===outDr && inDc===outDc) return 1.0;
+        const aIn = Math.atan2(inDr, inDc), aOut = Math.atan2(outDr, outDc);
+        let diff = Math.abs(aIn - aOut);
+        if (diff > Math.PI) diff = 2*Math.PI - diff;
+        const deg = diff * 180 / Math.PI;
+        if (deg >= 89.9) return Infinity;
+        return 1.0 + 0.5 * (deg/45.0)**2;
+    }
+
+    function astarSearch(startR, startC, goalR, goalC) {
+        const params = getParams();
+        const rows = gridH, cols = gridW;
+        const threshold = params.slopeThreshold;
+        const hw = params.heuristicWeight;
+
+        // Obstacle mask
+        const halfW = cols/2, halfH = rows/2;
+        const radius = Math.min(halfW, halfH);
+
+        // State key: (r, c, dr, dc)
+        function stateKey(r,c,dr,dc) { return `${r},${c},${dr},${dc}`; }
+
+        const heap = new MinHeap();
+        const startKey = stateKey(startR, startC, 0, 0);
+        heap.push([0, startR, startC, 0, 0]);
+        const gScore = new Map(); gScore.set(startKey, 0);
+        const cameFrom = new Map();
+
+        let iterations = 0;
+        const MAX_ITER = 2000000;
+
+        while (heap.size > 0 && iterations < MAX_ITER) {
+            iterations++;
+            const [, cr, cc, inDr, inDc] = heap.pop();
+            const curKey = stateKey(cr, cc, inDr, inDc);
+
+            if (cr === goalR && cc === goalC) {
+                // Reconstruct
+                const path = [[cr, cc]];
+                let cur = curKey;
+                while (cameFrom.has(cur)) {
+                    cur = cameFrom.get(cur);
+                    const parts = cur.split(',');
+                    path.push([parseInt(parts[0]), parseInt(parts[1])]);
+                }
+                path.reverse();
+                return { path, iterations };
+            }
+
+            const curG = gScore.get(curKey);
+            if (curG === undefined) continue;
+
+            const curSlope = slopeGrid[cr * cols + cc];
+
+            for (const [dr, dc, distMult] of DIRECTIONS) {
+                const nr = cr + dr, nc = cc + dc;
+                if (nr < 0 || nr >= rows || nc < 0 || nc >= cols) continue;
+
+                // Daire disi kontrol
+                const dx = nc - halfW, dz = nr - halfH;
+                if (dx*dx + dz*dz > radius*radius) continue;
+
+                const nSlope = slopeGrid[nr * cols + nc];
+                if (nSlope > threshold) continue;
+                if (obstacleGridMask && obstacleGridMask[nr * cols + nc]) continue;
+
+                const tm = turnMultiplier(inDr, inDc, dr, dc);
+                if (tm === Infinity) continue;
+
+                const avgSlope = (curSlope + nSlope) / 2.0;
+                const sm = slopeMultiplier(avgSlope);
+                const moveCost = distMult * sm * tm;
+
+                const tentG = curG + moveCost;
+                const nKey = stateKey(nr, nc, dr, dc);
+                const existingG = gScore.get(nKey);
+                if (existingG !== undefined && tentG >= existingG) continue;
+
+                gScore.set(nKey, tentG);
+                cameFrom.set(nKey, curKey);
+                const h = Math.hypot(nr - goalR, nc - goalC);
+                heap.push([tentG + hw * h, nr, nc, dr, dc]);
+            }
+        }
+        return null; // yol bulunamadi
+    }
+
+    // ============ POINT MARKING + A* ============
+    function onCanvasClick(event) {
+        if (!terrainTopMesh) return;
+
+        // Engel yerlestirme modu
+        if (obstacleMode) {
+            placeObstacleAtClick(event);
+            return;
+        }
+
+        if (markers.length >= 2) return;
+
+        const va = document.getElementById('viewer-area');
+        const rect = va.getBoundingClientRect();
+        mouse.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
+        mouse.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
+
+        raycaster.setFromCamera(mouse, camera);
+        const intersects = raycaster.intersectObject(terrainTopMesh);
+        if (intersects.length === 0) return;
+
+        // Dunya koordinatini terrainGroup lokal koordinatina cevir
+        const point = terrainGroup.worldToLocal(intersects[0].point.clone());
+        const mi = markers.length;
+        const color = mi === 0 ? 0x00ff88 : 0xff4444;
+
+        const sphere = new THREE.Mesh(new THREE.SphereGeometry(2,16,16),
+            new THREE.MeshPhongMaterial({ color, emissive: color, emissiveIntensity: 0.5 }));
+        sphere.position.copy(point); sphere.position.y += 2; getOverlay().add(sphere);
+
+        const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.3,0.3,8,8),
+            new THREE.MeshPhongMaterial({ color: 0xcccccc }));
+        pole.position.copy(point); pole.position.y -= 2; getOverlay().add(pole);
+
+        const ring = new THREE.Mesh(new THREE.TorusGeometry(3,0.4,8,32),
+            new THREE.MeshPhongMaterial({ color, emissive: color, emissiveIntensity: 0.3, transparent: true, opacity: 0.7 }));
+        ring.position.copy(point); ring.rotation.x = -Math.PI/2; getOverlay().add(ring);
+
+        markers.push({ sphere, pole, ring, position: point.clone(), objects: [sphere, pole, ring] });
+
+        const elev = ((point.y / heightScale) + elevationMin).toFixed(1);
+        const label = `X:${(point.x*meterPerUnit).toFixed(0)}m Z:${(point.z*meterPerUnit).toFixed(0)}m H:${elev}m`;
+        document.getElementById(`p${mi+1}-text`).textContent = label;
+
+        if (markers.length === 2) {
+            runPathfinding();
+        }
+    }
+
+    function runPathfinding() {
+        const p1 = markers[0].position, p2 = markers[1].position;
+        const startCol = Math.round(p1.x + gridW/2), startRow = Math.round(p1.z + gridH/2);
+        goalGridCol = Math.round(p2.x + gridW/2); goalGridRow = Math.round(p2.z + gridH/2);
+
+        const statusEl = document.getElementById('astar-status');
+        statusEl.textContent = 'A* hesaplaniyor...';
+        statusEl.style.display = 'block';
+        selectedWaypoints.clear();
+
+        setTimeout(() => {
+            const t0 = performance.now();
+            const result = astarSearch(startRow, startCol, goalGridRow, goalGridCol);
+            const elapsed = ((performance.now() - t0) / 1000).toFixed(2);
+            statusEl.style.display = 'none';
+
+            if (!result) {
+                document.getElementById('route-bar').textContent = 'Rota bulunamadi! Egim esigini artirmayi deneyin.';
+                document.getElementById('route-bar').style.display = 'block';
+                document.getElementById('route-bar').style.color = '#ff4444';
+                return;
+            }
+
+            drawAstarRoute(result.path, elapsed, result.iterations);
+            checkNearbyWaypoints(result.path);
+        }, 50);
+    }
+
+    function drawAstarRoute(path, elapsed, iterations) {
+        // Onceki cizimi temizle
+        if (lineMesh) { getOverlay().remove(lineMesh); lineMesh.geometry.dispose(); lineMesh.material.dispose(); lineMesh = null; }
+        if (tubeMeshRef) { getOverlay().remove(tubeMeshRef); tubeMeshRef.geometry.dispose(); tubeMeshRef.material.dispose(); tubeMeshRef = null; }
+        if (vehicleModel) { getOverlay().remove(vehicleModel); vehicleModel = null; }
+        vehicleAnimating = false;
+
+        const surfacePoints = [];
+        const liftY = 1.5;
+        for (const [pr, pc] of path) {
+            const wx = pc - gridW/2, wz = pr - gridH/2;
+            surfacePoints.push(new THREE.Vector3(wx, getTerrainY(wx, wz) + liftY, wz));
+        }
+
+        const lineGeom = new THREE.BufferGeometry().setFromPoints(surfacePoints);
+        lineMesh = new THREE.Line(lineGeom, new THREE.LineBasicMaterial({ color: 0x00ffcc, linewidth: 2 }));
+        getOverlay().add(lineMesh);
+
+        const curve = new THREE.CatmullRomCurve3(surfacePoints);
+        const tubeGeom = new THREE.TubeGeometry(curve, Math.min(surfacePoints.length, 500), 0.5, 8, false);
+        tubeMeshRef = new THREE.Mesh(tubeGeom, new THREE.MeshPhongMaterial({
+            color: 0x00ffcc, emissive: 0x00ffcc, emissiveIntensity: 0.3, transparent: true, opacity: 0.6
+        }));
+        getOverlay().add(tubeMeshRef);
+
+        // Mesafe: XZ grid birimlerini metreye, Y'yi heightScale'den gercek metreye cevir
+        let surfaceDist = 0;
+        for (let i = 1; i < surfacePoints.length; i++) {
+            const dx = (surfacePoints[i].x - surfacePoints[i-1].x) * meterPerUnit;
+            const dz = (surfacePoints[i].z - surfacePoints[i-1].z) * meterPerUnit;
+            const dy = (surfacePoints[i].y - surfacePoints[i-1].y) / heightScale; // gercek metre
+            surfaceDist += Math.sqrt(dx*dx + dy*dy + dz*dz);
+        }
+
+        const params = getParams();
+        const travelTime = surfaceDist / params.vehicleSpeed;
+
+        document.getElementById('res-distance').textContent = surfaceDist.toFixed(0) + ' m';
+        document.getElementById('res-km').textContent = (surfaceDist/1000).toFixed(2) + ' km';
+        document.getElementById('res-time').textContent = elapsed + ' s';
+        document.getElementById('res-steps').textContent = path.length;
+        document.getElementById('results-section').style.display = 'block';
+
+        const travelInfo = document.getElementById('res-travel');
+        travelInfo.innerHTML = `<span class="label">Seyahat:</span> ${travelTime.toFixed(1)}s @ ${params.vehicleSpeed} m/s | ${iterations.toLocaleString()} iter`;
+        travelInfo.style.display = 'block';
+
+        const wpCount = selectedWaypoints.size;
+        const wpLabel = wpCount > 0 ? ` | ${wpCount} waypoint` : '';
+        document.getElementById('route-bar').innerHTML =
+            `A* Rota: ${surfaceDist.toFixed(0)}m (${(surfaceDist/1000).toFixed(2)}km) | ${path.length} adim | ${elapsed}s${wpLabel}`;
+        document.getElementById('route-bar').style.display = 'block';
+        document.getElementById('route-bar').style.color = '#00ffcc';
+
+        vehicleCurve = curve;
+        vehicleCurveLength = curve.getLength();
+        vehicleProgress = 0; lastFrameTime = 0;
+        if (preloadedWallE) spawnVehicle();
+        else pendingVehicleSpawn = true;
+    }
+
+    // ============ WALL-E ============
+    let preloadedWallE = null, pendingVehicleSpawn = false, walleBaseScale = null;
+
+    function applyWalleScale() {
+        const box = new THREE.Box3().setFromObject(preloadedWallE);
+        const size = box.getSize(new THREE.Vector3());
+        walleBaseScale = 1.0 / Math.max(size.x, size.y, size.z);
+        const roverSize = 8;
+        const s = walleBaseScale * roverSize;
+        preloadedWallE.scale.set(s, s, s);
+    }
+
+    function preloadWallE() {
+        const loader = new THREE.GLTFLoader();
+        loader.load('Assets/WALLE.glb', (gltf) => {
+            preloadedWallE = gltf.scene;
+            applyWalleScale();
+            if (pendingVehicleSpawn && vehicleCurve) { spawnVehicle(); pendingVehicleSpawn = false; }
+        }, undefined, (err) => {
+            console.error('Wall-E hata, tekrar deneniyor:', err);
+            const loader2 = new THREE.GLTFLoader();
+            loader2.load('Assets/WALLE.glb', (gltf) => {
+                preloadedWallE = gltf.scene;
+                applyWalleScale();
+                if (pendingVehicleSpawn && vehicleCurve) { spawnVehicle(); pendingVehicleSpawn = false; }
+            }, undefined, () => createFallbackVehicle());
+        });
+    }
+
+    function createFallbackVehicle() {
+        preloadedWallE = new THREE.Group();
+        const body = new THREE.Mesh(new THREE.BoxGeometry(8,6,6), new THREE.MeshPhongMaterial({ color: 0xddaa33, emissive: 0x554400 }));
+        body.position.y = 3; preloadedWallE.add(body);
+        if (pendingVehicleSpawn && vehicleCurve) { spawnVehicle(); pendingVehicleSpawn = false; }
+    }
+
+    function spawnVehicle() {
+        if (vehicleModel) getOverlay().remove(vehicleModel);
+        vehicleModel = preloadedWallE;
+        vehicleModel.position.copy(vehicleCurve.getPointAt(0));
+        getOverlay().add(vehicleModel);
+        vehicleAnimating = true;
+        document.getElementById('camera-section').style.display = 'block';
+    }
+
+    // Return route
+    let returnLineMesh = null, returnTubeMesh = null;
+    function clearReturnRoute() {
+        if (returnLineMesh) { getOverlay().remove(returnLineMesh); returnLineMesh.geometry.dispose(); returnLineMesh.material.dispose(); returnLineMesh = null; }
+        if (returnTubeMesh) { getOverlay().remove(returnTubeMesh); returnTubeMesh.geometry.dispose(); returnTubeMesh.material.dispose(); returnTubeMesh = null; }
+    }
+
+    function drawReturnRoute(path) {
+        clearReturnRoute();
+        const surfacePoints = [];
+        for (const [pr, pc] of path) {
+            const wx = pc - gridW/2, wz = pr - gridH/2;
+            surfacePoints.push(new THREE.Vector3(wx, getTerrainY(wx, wz) + 1.5, wz));
+        }
+        const lineGeom = new THREE.BufferGeometry().setFromPoints(surfacePoints);
+        returnLineMesh = new THREE.Line(lineGeom, new THREE.LineBasicMaterial({ color: 0xff8800, linewidth: 2 }));
+        getOverlay().add(returnLineMesh);
+        const curve = new THREE.CatmullRomCurve3(surfacePoints);
+        const tubeGeom = new THREE.TubeGeometry(curve, Math.min(surfacePoints.length, 500), 0.4, 8, false);
+        returnTubeMesh = new THREE.Mesh(tubeGeom, new THREE.MeshPhongMaterial({
+            color: 0xff8800, emissive: 0xff8800, emissiveIntensity: 0.3, transparent: true, opacity: 0.45
+        }));
+        getOverlay().add(returnTubeMesh);
+        let dist = 0;
+        for (let i = 1; i < surfacePoints.length; i++) {
+            const dx = (surfacePoints[i].x - surfacePoints[i-1].x) * meterPerUnit;
+            const dz = (surfacePoints[i].z - surfacePoints[i-1].z) * meterPerUnit;
+            const dy = (surfacePoints[i].y - surfacePoints[i-1].y) / heightScale;
+            dist += Math.sqrt(dx*dx + dy*dy + dz*dz);
+        }
+        return dist;
+    }
+
+    // ============ LIDAR & OBSTACLE SYSTEM ============
+    const LIDAR_RANGE_M = 3000;
+    const OBSTACLE_RADIUS_GRID = 3;
+    const OBSTACLE_SAFETY_MARGIN = 8; // engel etrafinda ekstra guvenlik zonu (grid birim)
+
+    function toggleObstacleMode() {
+        obstacleMode = !obstacleMode;
+        const btn = document.getElementById('btn-obstacle');
+        const txt = document.getElementById('obstacle-mode-text');
+        btn.classList.toggle('active', obstacleMode);
+        btn.classList.toggle('obstacle-active', obstacleMode);
+        txt.textContent = obstacleMode ? 'AKTIF' : 'Kapali';
+        txt.style.color = obstacleMode ? '#00ff88' : '#ff4444';
+        renderer.domElement.style.cursor = obstacleMode ? 'crosshair' : 'default';
+    }
+
+    function placeObstacleAtClick(event) {
+        const va = document.getElementById('viewer-area');
+        const rect = va.getBoundingClientRect();
+        mouse.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
+        mouse.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
+
+        raycaster.setFromCamera(mouse, camera);
+        const intersects = raycaster.intersectObject(terrainTopMesh);
+        if (intersects.length === 0) return;
+
+        const point = terrainGroup.worldToLocal(intersects[0].point.clone());
+
+        // 3D engel mesh
+        const obsSize = OBSTACLE_RADIUS_GRID * 2;
+        const obsHeight = 8 + Math.random() * 6;
+        const obsGeom = new THREE.CylinderGeometry(obsSize * 0.6, obsSize * 0.8, obsHeight, 8);
+        const obsMat = new THREE.MeshPhongMaterial({
+            color: 0x665544, emissive: 0x221100, emissiveIntensity: 0.2,
+            flatShading: true
+        });
+        const obsMesh = new THREE.Mesh(obsGeom, obsMat);
+        obsMesh.position.copy(point);
+        obsMesh.position.y += obsHeight / 2 - 1;
+        // Hafif rastgele rotasyon
+        obsMesh.rotation.y = Math.random() * Math.PI;
+        getOverlay().add(obsMesh);
+        obstacleMeshes.push(obsMesh);
+
+        // Grid maskesine yaz — engel + guvenlik zonu
+        const gcol = Math.round(point.x + gridW / 2);
+        const grow = Math.round(point.z + gridH / 2);
+        const totalR = OBSTACLE_RADIUS_GRID + OBSTACLE_SAFETY_MARGIN;
+        for (let dy = -totalR; dy <= totalR; dy++) {
+            for (let dx = -totalR; dx <= totalR; dx++) {
+                if (dx*dx + dy*dy > totalR*totalR) continue;
+                const r = grow + dy, c = gcol + dx;
+                if (r >= 0 && r < gridH && c >= 0 && c < gridW) {
+                    obstacleGridMask[r * gridW + c] = 1;
+                }
+            }
+        }
+
+        document.getElementById('obstacle-count').textContent = obstacleMeshes.length;
+    }
+
+    function clearObstacles() {
+        obstacleMeshes.forEach(m => {
+            getOverlay().remove(m);
+            m.geometry.dispose(); m.material.dispose();
+        });
+        obstacleMeshes = [];
+        if (obstacleGridMask) obstacleGridMask.fill(0);
+        document.getElementById('obstacle-count').textContent = '0';
+        // LIDAR gorselleri temizle
+        clearLidarVisuals();
+    }
+
+    function clearLidarVisuals() {
+        if (lidarLineMesh) { getOverlay().remove(lidarLineMesh); lidarLineMesh.geometry.dispose(); lidarLineMesh.material.dispose(); lidarLineMesh = null; }
+        if (lidarHitMesh) { getOverlay().remove(lidarHitMesh); lidarHitMesh.geometry.dispose(); lidarHitMesh.material.dispose(); lidarHitMesh = null; }
+    }
+
+    // Animate loop icinde cagrilan LIDAR taramasi
+    function updateLidar(pos, nextPos) {
+        clearLidarVisuals();
+        if (!obstacleGridMask || obstacleMeshes.length === 0) return;
+        // Reroute sonrasi cooldown — engeli gecene kadar tarama yapma
+        if (vehicleProgress < lidarCooldownUntil) return;
+
+        const dir = new THREE.Vector3().subVectors(nextPos, pos).normalize();
+        const lidarRangeGrid = LIDAR_RANGE_M / meterPerUnit;
+
+        // Lazer cizgisi icin noktalar — yuzey takipli
+        const LIDAR_SAMPLES = 40;
+        const laserPoints = [];
+        let hitPoint = null;
+        let hitDist = lidarRangeGrid;
+
+        for (let i = 0; i <= LIDAR_SAMPLES; i++) {
+            const t = i / LIDAR_SAMPLES;
+            const d = t * lidarRangeGrid;
+            const px = pos.x + dir.x * d;
+            const pz = pos.z + dir.z * d;
+            const py = getTerrainY(px, pz) + 1.0;
+            laserPoints.push(new THREE.Vector3(px, py, pz));
+
+            // Grid kontrolu — engele carpti mi?
+            const gc = Math.round(px + gridW/2);
+            const gr = Math.round(pz + gridH/2);
+            if (gc >= 0 && gc < gridW && gr >= 0 && gr < gridH) {
+                if (obstacleGridMask[gr * gridW + gc] === 1) {
+                    hitPoint = new THREE.Vector3(px, py, pz);
+                    hitDist = d;
+                    break;
+                }
+            }
+        }
+
+        // Kirmizi lazer cizgisi
+        const laserGeom = new THREE.BufferGeometry().setFromPoints(laserPoints);
+        const laserMat = new THREE.LineBasicMaterial({ color: 0xff0000, linewidth: 2 });
+        lidarLineMesh = new THREE.Line(laserGeom, laserMat);
+        getOverlay().add(lidarLineMesh);
+
+        // Engele carptiysa
+        if (hitPoint) {
+            // Carpma noktasinda parlayan kure
+            const hitGeom = new THREE.SphereGeometry(1.5, 8, 8);
+            const hitMat = new THREE.MeshPhongMaterial({ color: 0xff0000, emissive: 0xff0000, emissiveIntensity: 0.8, transparent: true, opacity: 0.8 });
+            lidarHitMesh = new THREE.Mesh(hitGeom, hitMat);
+            lidarHitMesh.position.copy(hitPoint);
+            getOverlay().add(lidarHitMesh);
+
+            // Yeniden rotalama tetikle
+            if (!isRerouting) {
+                isRerouting = true;
+                lidarReroute(pos);
+            }
+        } else {
+            isRerouting = false;
+        }
+    }
+
+    function lidarReroute(currentPos) {
+        const curCol = Math.round(currentPos.x + gridW/2);
+        const curRow = Math.round(currentPos.z + gridH/2);
+
+        addChatMessage('<em>LIDAR engel tespit etti! Yeniden rotalama...</em>', 'system');
+
+        setTimeout(() => {
+            const t0 = performance.now();
+            const result = astarSearch(curRow, curCol, goalGridRow, goalGridCol);
+            const elapsed = ((performance.now() - t0) / 1000).toFixed(2);
+
+            if (!result) {
+                addChatMessage('Engel etrafinda rota bulunamadi!', 'system');
+                isRerouting = false;
+                return;
+            }
+
+            // Eski rota KALSIN — yeni rotayi turuncu renkte yanina ekle
+            const surfacePoints = [];
+            const liftY = 1.5;
+            for (const [pr, pc] of result.path) {
+                const wx = pc - gridW/2, wz = pr - gridH/2;
+                surfacePoints.push(new THREE.Vector3(wx, getTerrainY(wx, wz) + liftY, wz));
+            }
+
+            const rLine = new THREE.Line(
+                new THREE.BufferGeometry().setFromPoints(surfacePoints),
+                new THREE.LineBasicMaterial({ color: 0xff8800, linewidth: 2 })
+            );
+            getOverlay().add(rLine);
+
+            const curve = new THREE.CatmullRomCurve3(surfacePoints);
+            const rTube = new THREE.Mesh(
+                new THREE.TubeGeometry(curve, Math.min(surfacePoints.length, 500), 0.5, 8, false),
+                new THREE.MeshPhongMaterial({
+                    color: 0xff8800, emissive: 0xff8800, emissiveIntensity: 0.3, transparent: true, opacity: 0.5
+                })
+            );
+            getOverlay().add(rTube);
+            rerouteMeshes.push(rLine, rTube);
+
+            // Arac yeni curve'e gecis
+            vehicleCurve = curve;
+            vehicleCurveLength = curve.getLength();
+            vehicleProgress = 0;
+            // Engeli gecene kadar LIDAR'i sustur (300m veya %10 ilerleme, hangisi buyukse)
+            const cooldownDist = 300 / meterPerUnit; // 300 metre grid biriminde
+            lidarCooldownUntil = Math.max(0.10, cooldownDist / vehicleCurveLength);
+
+            let surfaceDist = 0;
+            for (let i = 1; i < surfacePoints.length; i++) {
+                const dx2 = (surfacePoints[i].x - surfacePoints[i-1].x) * meterPerUnit;
+                const dz2 = (surfacePoints[i].z - surfacePoints[i-1].z) * meterPerUnit;
+                const dy2 = (surfacePoints[i].y - surfacePoints[i-1].y) / heightScale;
+                surfaceDist += Math.sqrt(dx2*dx2 + dy2*dy2 + dz2*dz2);
+            }
+
+            document.getElementById('route-bar').innerHTML =
+                `LIDAR Reroute: ${surfaceDist.toFixed(0)}m (${(surfaceDist/1000).toFixed(2)}km) | ${result.path.length} adim | ${elapsed}s`;
+            document.getElementById('route-bar').style.display = 'block';
+            document.getElementById('route-bar').style.color = '#ff8800';
+
+            addChatMessage(`Yeni rota: <strong>${(surfaceDist/1000).toFixed(2)} km</strong>, ${result.path.length} adim`, 'system');
+
+            isRerouting = false;
+        }, 50);
+    }
+
+    function resetPoints() {
+        markers.forEach(m => m.objects.forEach(o => { getOverlay().remove(o); if(o.geometry)o.geometry.dispose(); if(o.material)o.material.dispose(); }));
+        markers = [];
+        if (lineMesh) { getOverlay().remove(lineMesh); lineMesh.geometry.dispose(); lineMesh.material.dispose(); lineMesh = null; }
+        if (tubeMeshRef) { getOverlay().remove(tubeMeshRef); tubeMeshRef.geometry.dispose(); tubeMeshRef.material.dispose(); tubeMeshRef = null; }
+        clearReturnRoute();
+        clearLidarVisuals();
+        rerouteMeshes.forEach(m => { getOverlay().remove(m); m.geometry.dispose(); m.material.dispose(); });
+        rerouteMeshes = [];
+        isRerouting = false;
+        lidarCooldownUntil = 0;
+        if (vehicleModel) { getOverlay().remove(vehicleModel); vehicleModel = null; }
+        vehicleAnimating = false; vehicleCurve = null; vehicleProgress = 0; lastFrameTime = 0; pendingVehicleSpawn = false;
+        if (cameraMode !== 'free') setCameraMode('free');
+        document.getElementById('camera-section').style.display = 'none';
+        document.getElementById('results-section').style.display = 'none';
+        document.getElementById('p1-text').textContent = 'Haritaya tiklayin';
+        document.getElementById('p2-text').textContent = '-';
+        document.getElementById('route-bar').style.display = 'none';
+        document.getElementById('astar-status').style.display = 'none';
+        lastPathResult = null;
+        selectedWaypoints.clear();
+    }
+
+    // ============ GEMINI API ============
+    const GEMINI_KEY = 'AIzaSyAvfNG81_IKDj93m3loOZamkZ5VtuSxJLA';
+    const GEMINI_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${GEMINI_KEY}`;
+    let geminiHistory = [];
+
+    const GEMINI_SYSTEM = `Sen DM1 Ay Istasyonu rota planlama asistanisin. Ay'in guney kutbu bolgesinde otonom rover navigasyonu icin yardim ediyorsun.
+
+Teknik bilgilerin:
+- Harita: Ay guney kutbu ~60.7km yaricap, 10m/piksel cozunurluk
+- A* pathfinding: 16-yonlu hareket, egim cezasi (1+(x/10)^2), donus cezasi (1+0.5*(aci/45)^2), >=90 derece yasak
+- Egim esigi varsayilan 20 derece (uzeri gecilmez)
+- Bilimsel waypoint'ler: Shackleton Ridge (kalici gunes, enerji), De Gerlache (radar gozlem), Amundsen-Ganswindt (buzul analiz), Haworth-Shoemaker (su buzu), Malapert Massif (Dunya iletisim hatti), Sverdrup (volatil madde), Connecting Ridge (sirt gecidi), Leibniz Beta (jeoloji)
+
+Kurallar:
+- Turkce yaz, teknik ama anlasilir ol
+- Kisa ve onemli bilgi ver, gereksiz uzatma
+- Rota analizi yaparken egim, mesafe, enerji, bilimsel deger ve risk faktorlerini degerlendir
+- "OTONOM_SENARYO" komutu gelirse: Ilginc bir kesfif senaryosu olustur. Gidis ve donus icin FARKLI rotalar oner. Asagidaki JSON formatinda cevap ver (aciklama metni + JSON):
+  {"gorev":"senaryo adi","start_row":N,"start_col":N,"goal_row":N,"goal_col":N,"return_goal_row":N,"return_goal_col":N,"waypoints":["id1","id2"]}
+  start/goal grid koordinatlari (0-${512} arasi). return_goal farkli bir noktadan donus icin. waypoints secilmesi onerilen waypoint id'leri.
+- "MISYON_RAPORU" komutu gelirse: Mevcut rota bilgilerini akademik bir misyon raporu formatinda ozetle.`;
+
+    function getRouteContext() {
+        const ctx = { haritaYuklendi: !!gridElevData, gridBoyut: gridW ? `${gridW}x${gridH}` : 'yok' };
+        if (markers.length >= 1) {
+            const p = markers[0].position;
+            ctx.baslangic = { x: (p.x*meterPerUnit).toFixed(0), z: (p.z*meterPerUnit).toFixed(0), yukseklik: ((p.y/heightScale)+elevationMin).toFixed(1) };
+        }
+        if (markers.length >= 2) {
+            const p = markers[1].position;
+            ctx.hedef = { x: (p.x*meterPerUnit).toFixed(0), z: (p.z*meterPerUnit).toFixed(0), yukseklik: ((p.y/heightScale)+elevationMin).toFixed(1) };
+        }
+        if (lastPathResult) ctx.rotaAdim = lastPathResult.length;
+        const resD = document.getElementById('res-distance');
+        if (resD && resD.textContent !== '-') {
+            ctx.mesafe = resD.textContent;
+            ctx.km = document.getElementById('res-km').textContent;
+            ctx.hesapSuresi = document.getElementById('res-time').textContent;
+        }
+        if (selectedWaypoints.size > 0) {
+            ctx.seciliWaypoints = [...selectedWaypoints].map(id => {
+                const wp = LUNAR_WAYPOINTS.find(w => w.id === id);
+                return wp ? wp.name : id;
+            });
+        }
+        const nearbyWps = [];
+        waypointGridPositions.forEach(wp => {
+            if (!lastPathResult) return;
+            const mapRadius = Math.min(gridW, gridH) / 2;
+            const mPerGrid = 60700 / mapRadius;
+            let minD = Infinity;
+            for (let i = 0; i < lastPathResult.length; i += Math.max(1, Math.floor(lastPathResult.length/100))) {
+                const d = Math.hypot(wp.row - lastPathResult[i][0], wp.col - lastPathResult[i][1]);
+                if (d < minD) minD = d;
+            }
+            nearbyWps.push({ isim: wp.name, mesafeKm: (minD * mPerGrid / 1000).toFixed(1), aciklama: wp.desc });
+        });
+        if (nearbyWps.length) ctx.yakinWaypoints = nearbyWps;
+        ctx.parametreler = getParams();
+        return ctx;
+    }
+
+    function addChatMessage(text, type) {
+        const chat = document.getElementById('gemini-chat');
+        const div = document.createElement('div');
+        div.className = `msg msg-${type}`;
+        div.innerHTML = text;
+        chat.appendChild(div);
+        chat.scrollTop = chat.scrollHeight;
+        return div;
+    }
+
+    function addLoadingMessage() {
+        const chat = document.getElementById('gemini-chat');
+        const div = document.createElement('div');
+        div.className = 'msg msg-loading';
+        div.id = 'gemini-loading';
+        div.innerHTML = '<div class="dots"><span></span><span></span><span></span></div> Dusunuyor...';
+        chat.appendChild(div);
+        chat.scrollTop = chat.scrollHeight;
+        return div;
+    }
+
+    function removeLoadingMessage() {
+        const el = document.getElementById('gemini-loading');
+        if (el) el.remove();
+    }
+
+    async function callGemini(userMessage, systemExtra) {
+        const ctx = getRouteContext();
+        const fullSystem = GEMINI_SYSTEM.replace('${512}', String(gridW || 512)) + '\n\nMevcut durum:\n' + JSON.stringify(ctx, null, 2) + (systemExtra ? '\n\n' + systemExtra : '');
+
+        geminiHistory.push({ role: 'user', parts: [{ text: userMessage }] });
+
+        const body = {
+            system_instruction: { parts: [{ text: fullSystem }] },
+            contents: geminiHistory,
+            generationConfig: { temperature: 0.7, maxOutputTokens: 1500 }
+        };
+
+        try {
+            const resp = await fetch(GEMINI_URL, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(body)
+            });
+            if (resp.status === 429) {
+                // Rate limit — bekle ve tekrar dene
+                removeLoadingMessage();
+                addChatMessage('Rate limit, 5sn bekleniyor...', 'system');
+                await new Promise(r => setTimeout(r, 5000));
+                addLoadingMessage();
+                const resp2 = await fetch(GEMINI_URL, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(body)
+                });
+                if (!resp2.ok) return `API hatasi (${resp2.status}). Biraz bekleyip tekrar deneyin.`;
+                const data2 = await resp2.json();
+                const text2 = data2.candidates?.[0]?.content?.parts?.[0]?.text || 'Yanit alinamadi.';
+                geminiHistory.push({ role: 'model', parts: [{ text: text2 }] });
+                if (geminiHistory.length > 20) geminiHistory = geminiHistory.slice(-10);
+                return text2;
+            }
+            if (!resp.ok) return `API hatasi (${resp.status}). Biraz bekleyip tekrar deneyin.`;
+            const data = await resp.json();
+            const text = data.candidates?.[0]?.content?.parts?.[0]?.text || 'Yanit alinamadi.';
+            geminiHistory.push({ role: 'model', parts: [{ text }] });
+            if (geminiHistory.length > 20) geminiHistory = geminiHistory.slice(-10);
+            return text;
+        } catch (e) {
+            console.error('Gemini hata:', e);
+            return `Baglanti hatasi. Interneti kontrol edin.`;
+        }
+    }
+
+    function formatGeminiResponse(text) {
+        return text
+            .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+            .replace(/\*(.*?)\*/g, '<em>$1</em>')
+            .replace(/`(.*?)`/g, '<code style="background:#16213e;padding:1px 4px;border-radius:3px;color:#7eb8ff;">$1</code>')
+            .replace(/\n/g, '<br>');
+    }
+
+    async function sendGeminiMessage() {
+        const input = document.getElementById('gemini-input');
+        const text = input.value.trim();
+        if (!text) return;
+        input.value = '';
+        addChatMessage(text, 'user');
+        addLoadingMessage();
+        const response = await callGemini(text);
+        removeLoadingMessage();
+        addChatMessage(formatGeminiResponse(response), 'ai');
+        processGeminiCommands(response);
+    }
+
+    // Rota hesaplandiginda otomatik analiz
+    async function geminiAutoAnalyze() {
+        if (!gridElevData) return;
+        addChatMessage('<em>Rota analizi baslatiliyor...</em>', 'system');
+        addLoadingMessage();
+        const response = await callGemini(
+            'Yeni bir rota hesaplandi. Baslangic ve bitis noktalarini, rotanin kalitesini, yakin waypoint\'leri ve onerilerini kisa ve onemli bilgilerle analiz et.'
+        );
+        removeLoadingMessage();
+        addChatMessage(formatGeminiResponse(response), 'ai');
+    }
+
+    // Otonom senaryo
+    async function geminiAutoScenario() {
+        if (!gridElevData) { addChatMessage('Once bir harita yukleyin.', 'system'); return; }
+        addChatMessage('<em>Otonom kesfif senaryosu isteniyor...</em>', 'system');
+        addLoadingMessage();
+        const response = await callGemini(
+            'OTONOM_SENARYO',
+            `Grid boyutu: ${gridW}x${gridH}. Gidis rotasi + farkli guzergahtan donus rotasi planla. JSON formatinda start/goal/return koordinatlari ve onerilern waypoint id listesi ver. Koordinatlar grid merkezine yakin olsun (${Math.round(gridW*0.2)}-${Math.round(gridW*0.8)} arasi). Dairesel harita oldugu icin merkezden ${Math.round(Math.min(gridW,gridH)/2*0.85)} piksel yaricap icinde kal.`
+        );
+        removeLoadingMessage();
+        addChatMessage(formatGeminiResponse(response), 'ai');
+        processGeminiCommands(response);
+    }
+
+    // Misyon raporu
+    async function geminiMissionReport() {
+        if (!lastPathResult) { addChatMessage('Once bir rota hesaplayin.', 'system'); return; }
+        addChatMessage('<em>Misyon raporu hazirlaniyor...</em>', 'system');
+        addLoadingMessage();
+        const response = await callGemini('MISYON_RAPORU');
+        removeLoadingMessage();
+        addChatMessage(formatGeminiResponse(response), 'ai');
+    }
+
+    // Rota analizi / karsilastirma
+    async function geminiCompare() {
+        if (!lastPathResult) { addChatMessage('Once bir rota hesaplayin.', 'system'); return; }
+        addChatMessage('<em>Detayli rota analizi...</em>', 'system');
+        addLoadingMessage();
+        const response = await callGemini(
+            'Bu rotanin detayli analizini yap: En riskli bolumleri, egim profili, enerji verimliligi, waypoint onerileri ve iyilestirme onerileri.'
+        );
+        removeLoadingMessage();
+        addChatMessage(formatGeminiResponse(response), 'ai');
+    }
+
+    // Gemini JSON komutlarini isle (otonom senaryo)
+    function processGeminiCommands(response) {
+        const jsonMatch = response.match(/\{[\s\S]*?"start_row"\s*:\s*\d+[\s\S]*?\}/);
+        if (!jsonMatch) return;
+
+        try {
+            const cmd = JSON.parse(jsonMatch[0]);
+            if (cmd.start_row !== undefined && cmd.goal_row !== undefined) {
+                addChatMessage(`<em>Senaryo uygulanıyor: ${cmd.gorev || 'Otonom Kesfif'}</em>`, 'system');
+                // Onceki rota temizle
+                resetPoints();
+
+                const sr = cmd.start_row, sc = cmd.start_col;
+                const gr = cmd.goal_row, gc = cmd.goal_col;
+
+                // Grid -> world koordinatlari
+                const startWX = sc - gridW/2, startWZ = sr - gridH/2;
+                const goalWX = gc - gridW/2, goalWZ = gr - gridH/2;
+                const startWY = getTerrainY(startWX, startWZ);
+                const goalWY = getTerrainY(goalWX, goalWZ);
+
+                // Marker'lari yerlestir
+                function placeAutoMarker(wx, wy, wz, color, idx) {
+                    const point = new THREE.Vector3(wx, wy, wz);
+                    const sphere = new THREE.Mesh(new THREE.SphereGeometry(2,16,16),
+                        new THREE.MeshPhongMaterial({ color, emissive: color, emissiveIntensity: 0.5 }));
+                    sphere.position.copy(point); sphere.position.y += 2; getOverlay().add(sphere);
+                    const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.3,0.3,8,8),
+                        new THREE.MeshPhongMaterial({ color: 0xcccccc }));
+                    pole.position.copy(point); pole.position.y -= 2; getOverlay().add(pole);
+                    const ring = new THREE.Mesh(new THREE.TorusGeometry(3,0.4,8,32),
+                        new THREE.MeshPhongMaterial({ color, emissive: color, emissiveIntensity: 0.3, transparent: true, opacity: 0.7 }));
+                    ring.position.copy(point); ring.rotation.x = -Math.PI/2; getOverlay().add(ring);
+                    markers.push({ sphere, pole, ring, position: point.clone(), objects: [sphere, pole, ring] });
+                    const elev = ((wy / heightScale) + elevationMin).toFixed(1);
+                    document.getElementById(`p${idx}-text`).textContent = `X:${(wx*meterPerUnit).toFixed(0)}m Z:${(wz*meterPerUnit).toFixed(0)}m H:${elev}m`;
+                }
+
+                placeAutoMarker(startWX, startWY, startWZ, 0x00ff88, 1);
+                placeAutoMarker(goalWX, goalWY, goalWZ, 0xff4444, 2);
+
+                // Waypoint'leri sec
+                if (cmd.waypoints && cmd.waypoints.length > 0) {
+                    cmd.waypoints.forEach(id => selectedWaypoints.add(id));
+                }
+
+                document.getElementById('points-section').style.display = 'block';
+
+                // A* calistir
+                const statusEl = document.getElementById('astar-status');
+                statusEl.textContent = 'Otonom senaryo: A* hesaplaniyor...';
+                statusEl.style.display = 'block';
+
+                setTimeout(() => {
+                    // Gidis rotasi
+                    if (selectedWaypoints.size > 0) {
+                        recomputeRouteWithWaypoints();
+                    } else {
+                        const t0 = performance.now();
+                        const result = astarSearch(sr, sc, gr, gc);
+                        const elapsed = ((performance.now() - t0) / 1000).toFixed(2);
+                        statusEl.style.display = 'none';
+                        if (result) {
+                            drawAstarRoute(result.path, elapsed, result.iterations);
+                            checkNearbyWaypoints(result.path);
+                        } else {
+                            addChatMessage('Gidis rotasi bulunamadi. Farkli koordinatlar deneniyor...', 'system');
+                            return;
+                        }
+                    }
+
+                    // Donus rotasi (farkli guzergah)
+                    if (cmd.return_goal_row !== undefined) {
+                        setTimeout(() => {
+                            addChatMessage('<em>Donus rotasi hesaplaniyor...</em>', 'system');
+                            const retResult = astarSearch(gr, gc, cmd.return_goal_row, cmd.return_goal_col);
+                            if (retResult) {
+                                const retDist = drawReturnRoute(retResult.path);
+                                addChatMessage(`Donus rotasi: <strong>${(retDist/1000).toFixed(2)} km</strong> (turuncu ile gosteriliyor)`, 'system');
+                            } else {
+                                // Donus noktasi bulunamazsa baslangica donus dene
+                                const retResult2 = astarSearch(gr, gc, sr, sc);
+                                if (retResult2) {
+                                    const retDist = drawReturnRoute(retResult2.path);
+                                    addChatMessage(`Alternatif donus (baslangica): <strong>${(retDist/1000).toFixed(2)} km</strong>`, 'system');
+                                }
+                            }
+                        }, 200);
+                    }
+                }, 100);
+            }
+        } catch (e) {
+            console.error('Senaryo JSON parse hatasi:', e);
+        }
+    }
+
+    // Rota hesaplandiktan sonra otomatik Gemini analizi tetikle
+    const origDrawAstarRoute = drawAstarRoute;
+
+    // ============ START ============
+    initScene();
+    preloadWallE();
+</script>
+</body>
+</html>

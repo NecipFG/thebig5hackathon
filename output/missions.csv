@@ -1,0 +1,4 @@
+mission_id,name,difficulty,start_lat,start_lon,start_row,start_col,goal_lat,goal_lon,goal_row,goal_col,dem_file,objective
+1,Shackleton Rim,easy,-89.68,0.0,23,0,-89.5,45.0,20,900,data/dem/mission1.tif,Crater rim surface sample survey
+2,de Gerlache Basin,medium,-88.55,274.7,35,214,-87.8,265.0,20,20,data/dem/mission2.tif,Solar wind deposit sampling
+3,Haworth to Nobile,hard,-87.47,4.58,59,19,-85.5,45.0,19,828,data/dem/mission3.tif,Permanently shadowed region boundary survey
