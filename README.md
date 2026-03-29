@@ -34,7 +34,7 @@ A* pathfinding algoritmasi, gercek lunar toporafya verisi (GeoTIFF), LIDAR engel
 - Opsiyonel waypoint ekleme — zorla yonlendirme yok, secim kullanicida
 - Coklu waypoint seciminde greedy nearest-neighbor siralama ile multi-segment A*
 
-### Gemini AI Asistan
+### AI Asistan
 - Rota analizi ve degerlendirme
 - **Otonom kesfif senaryosu**: AI baslangic/bitis noktasi onerir, gidis + farkli guzergahtan donus rotasi cizdiriyor
 - Akademik misyon raporu olusturma
@@ -98,7 +98,7 @@ Sag paneldeki dropdown'dan bir TIF dosyasi secin:
 - Checkbox ile istediginiz waypoint'leri rotaya ekleyin
 - Tarama yaricapini slider ile ayarlayin (5-60 km)
 
-### 6. Gemini AI Asistan
+### 6. AI Asistan
 - **Otonom Senaryo**: AI kesfif senaryosu olusturur ve otomatik uygular
 - **Misyon Raporu**: Mevcut rotanin akademik ozeti
 - **Rota Analizi**: Detayli risk ve performans degerlendirmesi
